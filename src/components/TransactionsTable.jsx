@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useReducer } from 'react'
 import SectionHeader from './SectionHeader.jsx'
 import { formatCurrency, formatDate } from '../utils/format.js'
 
@@ -11,8 +11,21 @@ const columns = [
   { key: 'cycleStart', label: 'Billing Cycle Start' },
 ]
 
+const initialSort = { key: 'date', direction: 'desc' }
+
+function sortReducer(state, action) {
+  if (action.type !== 'TOGGLE') return state
+  if (state.key === action.key) {
+    return {
+      key: action.key,
+      direction: state.direction === 'asc' ? 'desc' : 'asc',
+    }
+  }
+  return { key: action.key, direction: 'asc' }
+}
+
 export default function TransactionsTable({ rows }) {
-  const [sort, setSort] = useState({ key: 'date', direction: 'desc' })
+  const [sort, dispatch] = useReducer(sortReducer, initialSort)
 
   const sortedRows = useMemo(() => {
     const sorted = [...rows].sort((a, b) => {
@@ -24,17 +37,7 @@ export default function TransactionsTable({ rows }) {
     return sort.direction === 'asc' ? sorted : sorted.reverse()
   }, [rows, sort])
 
-  const handleSort = (key) => {
-    setSort((prev) => {
-      if (prev.key === key) {
-        return {
-          key,
-          direction: prev.direction === 'asc' ? 'desc' : 'asc',
-        }
-      }
-      return { key, direction: 'asc' }
-    })
-  }
+  const handleSort = (key) => dispatch({ type: 'TOGGLE', key })
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

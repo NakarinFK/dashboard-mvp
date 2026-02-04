@@ -5,18 +5,21 @@ import KpiGrid from './KpiGrid.jsx'
 import PlanningSection from './PlanningSection.jsx'
 import TimelineSection from './TimelineSection.jsx'
 import TransactionsTable from './TransactionsTable.jsx'
-import {
+import TransactionForm from './TransactionForm.jsx'
+
+export default function Dashboard({
+  navItems,
+  kpis,
   accounts,
+  subscriptions,
   budgetCategories,
   cashFlow,
-  kpis,
-  navItems,
-  subscriptions,
   transactions,
   upcomingBills,
-} from '../data/mockData.js'
-
-export default function Dashboard() {
+  formAccounts,
+  formCategories,
+  dispatch,
+}) {
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-8">
       <header className="space-y-3">
@@ -51,6 +54,11 @@ export default function Dashboard() {
             inflow={cashFlow.inflow}
             outflow={cashFlow.outflow}
             breakdown={cashFlow.breakdown}
+          />
+          <TransactionForm
+            accounts={formAccounts}
+            categories={formCategories}
+            dispatch={dispatch}
           />
           <TransactionsTable rows={transactions} />
           <TimelineSection items={upcomingBills} />
