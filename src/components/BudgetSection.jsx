@@ -1,34 +1,84 @@
+import { useMemo } from 'react'
 import SectionHeader from './SectionHeader.jsx'
 import { formatCurrency } from '../utils/format.js'
 
-export default function BudgetSection({ categories }) {
+export default function BudgetSection({
+  categories = [],
+  budgets,
+  activeCycleId,
+  transactions = [],
+  dispatch,
+}) {
+  const { spentByCategory, monthLabel, activeBudgetMap } = useMemo(() => {
+    const label = formatCycleLabel(activeCycleId)
+    const map = new Map()
+    const activeProfile = (budgets || []).find(
+      (profile) => profile.cycleId === activeCycleId
+    )
+    const budgetMap = activeProfile?.budgets || {}
+
+    transactions.forEach((transaction) => {
+      if (transaction.type !== 'expense') return
+      if (transaction.cycleId !== activeCycleId) return
+      if (!transaction.categoryId) return
+
+      const current = map.get(transaction.categoryId) || 0
+      map.set(transaction.categoryId, current + Number(transaction.amount || 0))
+    })
+
+    return {
+      spentByCategory: map,
+      monthLabel: label,
+      activeBudgetMap: budgetMap,
+    }
+  }, [transactions, budgets, activeCycleId])
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <SectionHeader
         title="Budget Plan"
-        subtitle="Tracked by category"
+        subtitle={`Tracked by category · ${monthLabel}`}
       />
       <div className="mt-4 space-y-4">
         {categories.map((item) => {
-          const percent = item.budget
-            ? Math.round((item.spent / item.budget) * 100)
+          const budgeted = Number(activeBudgetMap[item.id]) || 0
+          const spent = spentByCategory.get(item.id) || 0
+          const percent = budgeted
+            ? Math.round((spent / budgeted) * 100)
             : 0
           const capped = Math.min(percent, 100)
-          const remaining = item.budget - item.spent
+          const remaining = budgeted - spent
           return (
-            <div key={item.name} className="space-y-2">
+            <div key={item.id} className="space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">
                     {item.name}
                   </p>
-                  <p className="text-xs text-slate-500">
-                    Budget: {formatCurrency(item.budget)}
-                  </p>
+                  <label className="flex items-center gap-2 text-xs text-slate-500">
+                    <span>Budget:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={budgeted}
+                      onChange={(event) =>
+                        dispatch({
+                          type: 'UPDATE_BUDGET',
+                          payload: {
+                            cycleId: activeCycleId,
+                            categoryId: item.id,
+                            amount: event.target.value,
+                          },
+                        })
+                      }
+                      className="w-24 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+                    />
+                  </label>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-slate-900">
-                    {formatCurrency(item.spent)}
+                    {formatCurrency(spent)}
                   </p>
                   <p className="text-xs text-slate-500">
                     {remaining >= 0
@@ -50,4 +100,12 @@ export default function BudgetSection({ categories }) {
       </div>
     </section>
   )
+}
+
+function formatCycleLabel(cycleId) {
+  if (!cycleId) return 'Current Month'
+  const [year, month] = cycleId.split('-').map(Number)
+  if (!year || !month) return cycleId
+  const date = new Date(year, month - 1, 1)
+  return date.toLocaleString('en-US', { month: 'long', year: 'numeric' })
 }

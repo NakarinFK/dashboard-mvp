@@ -3,15 +3,17 @@ import { formatCurrency } from '../utils/format.js'
 
 export default function CashFlowSection({ inflow, outflow, breakdown }) {
   const total = breakdown.reduce((sum, item) => sum + item.value, 0)
+  const safeTotal = total || 1
   let current = 0
   const segments = breakdown.map((item) => {
-    const start = (current / total) * 100
+    const start = (current / safeTotal) * 100
     current += item.value
-    const end = (current / total) * 100
+    const end = (current / safeTotal) * 100
     return `${item.color} ${start}% ${end}%`
   })
+  const fallbackSegment = '#e2e8f0 0% 100%'
   const donutStyle = {
-    background: `conic-gradient(${segments.join(', ')})`,
+    background: `conic-gradient(${segments.join(', ') || fallbackSegment})`,
   }
 
   return (

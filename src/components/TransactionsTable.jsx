@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useReducer } from 'react'
 import SectionHeader from './SectionHeader.jsx'
 import { formatCurrency, formatDate } from '../utils/format.js'
 
@@ -11,8 +11,23 @@ const columns = [
   { key: 'cycleStart', label: 'Billing Cycle Start' },
 ]
 
-export default function TransactionsTable({ rows }) {
-  const [sort, setSort] = useState({ key: 'date', direction: 'desc' })
+const initialSort = { key: 'date', direction: 'desc' }
+
+function sortReducer(state, action) {
+  if (action.type !== 'TOGGLE') return state
+  if (state.key === action.key) {
+    return {
+      key: action.key,
+      direction: state.direction === 'asc' ? 'desc' : 'asc',
+    }
+  }
+  return { key: action.key, direction: 'asc' }
+}
+
+export default function TransactionsTable({ rows, onEdit, onDelete }) {
+  const [sort, dispatch] = useReducer(sortReducer, initialSort)
+  const showEdit = typeof onEdit === 'function'
+  const showDelete = typeof onDelete === 'function'
 
   const sortedRows = useMemo(() => {
     const sorted = [...rows].sort((a, b) => {
@@ -24,17 +39,7 @@ export default function TransactionsTable({ rows }) {
     return sort.direction === 'asc' ? sorted : sorted.reverse()
   }, [rows, sort])
 
-  const handleSort = (key) => {
-    setSort((prev) => {
-      if (prev.key === key) {
-        return {
-          key,
-          direction: prev.direction === 'asc' ? 'desc' : 'asc',
-        }
-      }
-      return { key, direction: 'asc' }
-    })
-  }
+  const handleSort = (key) => dispatch({ type: 'TOGGLE', key })
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -69,6 +74,9 @@ export default function TransactionsTable({ rows }) {
                   </button>
                 </th>
               ))}
+              {showEdit || showDelete ? (
+                <th className="py-2 pr-4 text-right font-medium">Actions</th>
+              ) : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -78,10 +86,49 @@ export default function TransactionsTable({ rows }) {
                 <td className="py-3 pr-4 text-right">
                   {formatCurrency(row.amount)}
                 </td>
-                <td className="py-3 pr-4">{row.category}</td>
+                <td className="py-3 pr-4">
+                  <div className="flex items-center gap-2">
+                    <span>{row.category}</span>
+                    {row.categoryDisabled ? (
+                      <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                        Disabled
+                      </span>
+                    ) : null}
+                  </div>
+                </td>
                 <td className="py-3 pr-4">{row.method}</td>
                 <td className="py-3 pr-4">{formatDate(row.date)}</td>
                 <td className="py-3 pr-4">{formatDate(row.cycleStart)}</td>
+                {showEdit || showDelete ? (
+                  <td className="py-3 pr-4 text-right">
+                    <div className="flex items-center justify-end gap-3">
+                      {showEdit && row.type !== 'opening' ? (
+                        <button
+                          type="button"
+                          onClick={() => onEdit(row.id)}
+                          className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+                      {showDelete && row.type !== 'opening' ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (
+                              confirm('Delete this transaction?')
+                            ) {
+                              onDelete(row.id)
+                            }
+                          }}
+                          className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                        >
+                          Delete
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
