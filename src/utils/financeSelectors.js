@@ -33,6 +33,7 @@ export function buildAccountSummaries(accounts, transactions) {
   })
 
   return accounts.map((account) => ({
+    id: account.id,
     name: account.name,
     balance: account.balance,
     income: incomeByAccount.get(account.id) || 0,
@@ -40,14 +41,19 @@ export function buildAccountSummaries(accounts, transactions) {
   }))
 }
 
-export function buildCashFlow(transactions) {
+export function buildCashFlow(transactions, categories) {
   const inflow = sumByType(transactions, 'income')
   const outflow = sumByType(transactions, 'expense')
   const breakdownMap = new Map()
+  const categoryMap = new Map(
+    (categories || []).map((category) => [category.id, category])
+  )
 
   transactions.forEach((transaction) => {
     if (transaction.type !== 'expense') return
-    const key = transaction.category || 'Uncategorized'
+    const category =
+      categoryMap.get(transaction.categoryId) || { name: 'Uncategorized' }
+    const key = category.name
     breakdownMap.set(key, (breakdownMap.get(key) || 0) + transaction.amount)
   })
 
@@ -63,8 +69,11 @@ export function buildCashFlow(transactions) {
   return { inflow, outflow, breakdown }
 }
 
-export function buildTransactionRows(transactions, accounts) {
+export function buildTransactionRows(transactions, accounts, categories) {
   const accountMap = new Map(accounts.map((account) => [account.id, account.name]))
+  const categoryMap = new Map(
+    (categories || []).map((category) => [category.id, category])
+  )
 
   return transactions.map((transaction) => {
     const fromName = transaction.fromAccount
@@ -73,6 +82,9 @@ export function buildTransactionRows(transactions, accounts) {
     const toName = transaction.toAccount
       ? accountMap.get(transaction.toAccount) || 'Unknown'
       : '—'
+    const category = categoryMap.get(transaction.categoryId)
+    const categoryName = category?.name || 'Uncategorized'
+    const categoryDisabled = Boolean(category?.disabled)
 
     let method = '—'
     if (transaction.type === 'income') {
@@ -81,13 +93,29 @@ export function buildTransactionRows(transactions, accounts) {
       method = fromName
     } else if (transaction.type === 'transfer') {
       method = `${fromName} → ${toName}`
+    } else if (transaction.type === 'opening') {
+      method = toName
     }
+
+    const isOpening = transaction.type === 'opening'
+    const displayCategory = isOpening
+      ? 'Opening'
+      : transaction.type === 'transfer'
+        ? 'Transfer'
+        : categoryName
+    const displayTitle =
+      transaction.note ||
+      (isOpening ? 'Opening Balance' : categoryName) ||
+      transaction.type
 
     return {
       id: transaction.id,
-      transaction: transaction.note || transaction.category || transaction.type,
+      transaction: displayTitle,
       amount: transaction.amount,
-      category: transaction.category || 'Transfer',
+      category: displayCategory,
+      categoryDisabled,
+      categoryId: transaction.categoryId,
+      type: transaction.type,
       method,
       date: transaction.date,
       cycleStart: transaction.date,
@@ -95,46 +123,27 @@ export function buildTransactionRows(transactions, accounts) {
   })
 }
 
-export function buildBudgetCategories(budgetCategories, transactions) {
-  const spendByCategory = new Map()
-
-  transactions.forEach((transaction) => {
-    if (transaction.type !== 'expense') return
-    const key = transaction.category || 'Uncategorized'
-    spendByCategory.set(key, (spendByCategory.get(key) || 0) + transaction.amount)
-  })
-
-  return budgetCategories.map((category) => ({
-    ...category,
-    spent: spendByCategory.get(category.name) ?? category.spent ?? 0,
-  }))
-}
-
-export function buildKpis({ accounts, transactions, subscriptions, budget }) {
+export function buildKpis({
+  accounts,
+  transactions,
+  budgetTotal,
+  spentTotal,
+  plannedTotal,
+}) {
   const totalBalance = accounts.reduce(
     (sum, account) => sum + Number(account.balance || 0),
     0
   )
   const inflow = sumByType(transactions, 'income')
   const outflow = sumByType(transactions, 'expense')
-  const plannedCosts = subscriptions.reduce(
-    (sum, item) => sum + Number(item.cost || 0),
-    0
-  )
-  const budgetTotal = budget.reduce(
-    (sum, item) => sum + Number(item.budget || 0),
-    0
-  )
-  const spentTotal = budget.reduce(
-    (sum, item) => sum + Number(item.spent || 0),
-    0
-  )
+  const plannedCosts = Number(plannedTotal || 0)
+  const availableBalance = totalBalance - plannedCosts
 
   return [
     {
       label: 'Total Balance',
       value: formatCurrency(totalBalance),
-      note: `Across ${accounts.length} accounts`,
+      note: `Available after planned: ${formatCurrency(availableBalance)}`,
     },
     {
       label: 'Cash Flow (This Month)',
@@ -144,11 +153,11 @@ export function buildKpis({ accounts, transactions, subscriptions, budget }) {
     {
       label: 'Planned Costs',
       value: formatCurrency(plannedCosts),
-      note: 'Subscriptions and fixed costs',
+      note: 'Planned for the active cycle',
     },
     {
       label: 'Budget Left',
-      value: formatCurrency(budgetTotal - spentTotal),
+      value: formatCurrency(Number(budgetTotal || 0) - Number(spentTotal || 0)),
       note: 'Remaining before month end',
     },
   ]

@@ -7,17 +7,11 @@ import {
 } from './financeReducer.js'
 import {
   buildAccountSummaries,
-  buildBudgetCategories,
   buildCashFlow,
   buildKpis,
   buildTransactionRows,
 } from './utils/financeSelectors.js'
-import {
-  budgetCategories,
-  navItems,
-  subscriptions,
-  upcomingBills,
-} from './data/mockData.js'
+import { navItems, upcomingBills } from './data/mockData.js'
 
 export default function App() {
   const [state, dispatch] = useReducer(
@@ -30,26 +24,57 @@ export default function App() {
     persistFinanceState(state)
   }, [state])
 
+  const activeCycleId = useMemo(() => getCurrentCycleId(), [])
+
   const derived = useMemo(() => {
-    const budget = buildBudgetCategories(budgetCategories, state.transactions)
+    const activeProfile = (state.budgets || []).find(
+      (profile) => profile.cycleId === activeCycleId
+    )
+    const activeBudgetMap = activeProfile?.budgets || {}
+    const plannedTotal = (state.planningCosts || [])
+      .filter(
+        (cost) => cost.cycleId === activeCycleId && cost.status === 'planned'
+      )
+      .reduce((sum, cost) => sum + Number(cost.amount || 0), 0)
+    const spentTotal = state.transactions
+      .filter(
+        (transaction) =>
+          transaction.type === 'expense' &&
+          transaction.cycleId === activeCycleId
+      )
+      .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0)
+    const budgetTotal = Object.values(activeBudgetMap).reduce(
+      (sum, value) => sum + Number(value || 0),
+      0
+    )
     return {
       accounts: buildAccountSummaries(state.accounts, state.transactions),
-      transactions: buildTransactionRows(state.transactions, state.accounts),
-      cashFlow: buildCashFlow(state.transactions),
-      budget,
+      transactions: buildTransactionRows(
+        state.transactions,
+        state.accounts,
+        state.categories
+      ),
+      cashFlow: buildCashFlow(state.transactions, state.categories),
+      activeBudgetMap,
+      budgetTotal,
+      spentTotal,
+      plannedTotal,
       kpis: buildKpis({
         accounts: state.accounts,
         transactions: state.transactions,
-        subscriptions,
-        budget,
+        budgetTotal,
+        spentTotal,
+        plannedTotal,
       }),
     }
-  }, [state.accounts, state.transactions])
-
-  const formCategories = useMemo(
-    () => budgetCategories.map((category) => category.name),
-    []
-  )
+  }, [
+    state.accounts,
+    state.budgets,
+    state.categories,
+    state.transactions,
+    state.planningCosts,
+    activeCycleId,
+  ])
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -57,15 +82,22 @@ export default function App() {
         navItems={navItems}
         kpis={derived.kpis}
         accounts={derived.accounts}
-        subscriptions={subscriptions}
-        budgetCategories={derived.budget}
+        categories={state.categories}
+        budgets={state.budgets}
+        activeCycleId={activeCycleId}
+        planningCosts={state.planningCosts}
         cashFlow={derived.cashFlow}
         transactions={derived.transactions}
         upcomingBills={upcomingBills}
         formAccounts={state.accounts}
-        formCategories={formCategories}
+        rawTransactions={state.transactions}
         dispatch={dispatch}
       />
     </div>
   )
+}
+
+function getCurrentCycleId() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }

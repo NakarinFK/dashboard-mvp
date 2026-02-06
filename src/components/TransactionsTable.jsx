@@ -24,8 +24,10 @@ function sortReducer(state, action) {
   return { key: action.key, direction: 'asc' }
 }
 
-export default function TransactionsTable({ rows }) {
+export default function TransactionsTable({ rows, onEdit, onDelete }) {
   const [sort, dispatch] = useReducer(sortReducer, initialSort)
+  const showEdit = typeof onEdit === 'function'
+  const showDelete = typeof onDelete === 'function'
 
   const sortedRows = useMemo(() => {
     const sorted = [...rows].sort((a, b) => {
@@ -72,6 +74,9 @@ export default function TransactionsTable({ rows }) {
                   </button>
                 </th>
               ))}
+              {showEdit || showDelete ? (
+                <th className="py-2 pr-4 text-right font-medium">Actions</th>
+              ) : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -81,10 +86,49 @@ export default function TransactionsTable({ rows }) {
                 <td className="py-3 pr-4 text-right">
                   {formatCurrency(row.amount)}
                 </td>
-                <td className="py-3 pr-4">{row.category}</td>
+                <td className="py-3 pr-4">
+                  <div className="flex items-center gap-2">
+                    <span>{row.category}</span>
+                    {row.categoryDisabled ? (
+                      <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                        Disabled
+                      </span>
+                    ) : null}
+                  </div>
+                </td>
                 <td className="py-3 pr-4">{row.method}</td>
                 <td className="py-3 pr-4">{formatDate(row.date)}</td>
                 <td className="py-3 pr-4">{formatDate(row.cycleStart)}</td>
+                {showEdit || showDelete ? (
+                  <td className="py-3 pr-4 text-right">
+                    <div className="flex items-center justify-end gap-3">
+                      {showEdit && row.type !== 'opening' ? (
+                        <button
+                          type="button"
+                          onClick={() => onEdit(row.id)}
+                          className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+                      {showDelete && row.type !== 'opening' ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (
+                              confirm('Delete this transaction?')
+                            ) {
+                              onDelete(row.id)
+                            }
+                          }}
+                          className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                        >
+                          Delete
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>

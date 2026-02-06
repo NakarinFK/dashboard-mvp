@@ -1,25 +1,98 @@
+import { useMemo, useReducer } from 'react'
 import AccountsSection from './AccountsSection.jsx'
+import AddAccountForm from './AddAccountForm.jsx'
 import BudgetSection from './BudgetSection.jsx'
 import CashFlowSection from './CashFlowSection.jsx'
+import CategoryManager from './CategoryManager.jsx'
 import KpiGrid from './KpiGrid.jsx'
-import PlanningSection from './PlanningSection.jsx'
+import PlanningCostSection from './PlanningCostSection.jsx'
 import TimelineSection from './TimelineSection.jsx'
 import TransactionsTable from './TransactionsTable.jsx'
 import TransactionForm from './TransactionForm.jsx'
+import { buildTransactionRows } from '../utils/financeSelectors.js'
 
 export default function Dashboard({
   navItems,
   kpis,
   accounts,
-  subscriptions,
-  budgetCategories,
+  categories,
+  budgets,
+  activeCycleId,
+  planningCosts,
   cashFlow,
   transactions,
   upcomingBills,
   formAccounts,
-  formCategories,
+  rawTransactions,
   dispatch,
 }) {
+  const [editingTransaction, dispatchEdit] = useReducer(editReducer, null)
+  const [selectedAccountId, dispatchSelection] = useReducer(
+    selectionReducer,
+    null
+  )
+
+  const handleEdit = (id) => {
+    const transaction = rawTransactions.find((item) => item.id === id)
+    if (!transaction || transaction.type === 'opening') return
+    dispatchEdit({ type: 'START', transaction })
+  }
+
+  const handleCancelEdit = () => dispatchEdit({ type: 'CLEAR' })
+
+  const handleDelete = (id) => {
+    dispatch({ type: 'DELETE_TRANSACTION', payload: { id } })
+    if (editingTransaction?.id === id) {
+      dispatchEdit({ type: 'CLEAR' })
+    }
+  }
+
+  const handleSelectAccount = (accountId) =>
+    dispatchSelection({ type: 'SELECT', accountId })
+
+  const handleClearSelection = () => dispatchSelection({ type: 'CLEAR' })
+
+  const selectedAccount = formAccounts.find(
+    (account) => account.id === selectedAccountId
+  )
+
+  const filteredRows = useMemo(() => {
+    if (!selectedAccountId) return []
+    const filtered = rawTransactions.filter((transaction) => {
+      if (transaction.type === 'expense') {
+        return transaction.fromAccount === selectedAccountId
+      }
+      if (transaction.type === 'income') {
+        return transaction.toAccount === selectedAccountId
+      }
+      if (transaction.type === 'opening') {
+        return transaction.toAccount === selectedAccountId
+      }
+      if (transaction.type === 'transfer') {
+        return (
+          transaction.fromAccount === selectedAccountId ||
+          transaction.toAccount === selectedAccountId
+        )
+      }
+      return false
+    })
+    return buildTransactionRows(filtered, formAccounts, categories)
+  }, [rawTransactions, formAccounts, categories, selectedAccountId])
+
+  const visibleTransactions = selectedAccountId ? filteredRows : transactions
+
+  const handleSubmit = (payload) => {
+    if (editingTransaction) {
+      dispatch({
+        type: 'UPDATE_TRANSACTION',
+        payload: { ...payload, id: editingTransaction.id },
+      })
+      dispatchEdit({ type: 'CLEAR' })
+      return
+    }
+    dispatch({ type: 'ADD_TRANSACTION', payload })
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-8">
       <header className="space-y-3">
@@ -45,9 +118,34 @@ export default function Dashboard({
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
         <div className="space-y-6 xl:col-span-7">
-          <AccountsSection accounts={accounts} />
-          <PlanningSection subscriptions={subscriptions} />
-          <BudgetSection categories={budgetCategories} />
+          <AccountsSection
+            accounts={accounts}
+            onSelect={handleSelectAccount}
+            selectedAccountId={selectedAccountId}
+            dispatch={dispatch}
+            transactions={rawTransactions}
+            activeCycleId={activeCycleId}
+          />
+          <AddAccountForm dispatch={dispatch} />
+          <PlanningCostSection
+            planningCosts={planningCosts}
+            categories={categories}
+            accounts={formAccounts}
+            activeCycleId={activeCycleId}
+            dispatch={dispatch}
+          />
+          <BudgetSection
+            categories={categories}
+            budgets={budgets}
+            activeCycleId={activeCycleId}
+            transactions={rawTransactions}
+            dispatch={dispatch}
+          />
+          <CategoryManager
+            categories={categories}
+            transactions={rawTransactions}
+            dispatch={dispatch}
+          />
         </div>
         <div className="space-y-6 xl:col-span-5">
           <CashFlowSection
@@ -57,13 +155,61 @@ export default function Dashboard({
           />
           <TransactionForm
             accounts={formAccounts}
-            categories={formCategories}
+            categories={categories}
+            editingTransaction={editingTransaction}
+            onSubmit={handleSubmit}
+            onCancel={handleCancelEdit}
             dispatch={dispatch}
           />
-          <TransactionsTable rows={transactions} />
+          {selectedAccountId ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span>
+                  Viewing transactions for{' '}
+                  <span className="font-semibold text-slate-900">
+                    {selectedAccount?.name || 'Selected Account'}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <TransactionsTable
+            rows={visibleTransactions}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
           <TimelineSection items={upcomingBills} />
         </div>
       </div>
     </div>
   )
+}
+
+function editReducer(state, action) {
+  switch (action.type) {
+    case 'START':
+      return action.transaction || null
+    case 'CLEAR':
+      return null
+    default:
+      return state
+  }
+}
+
+function selectionReducer(state, action) {
+  switch (action.type) {
+    case 'SELECT':
+      return action.accountId
+    case 'CLEAR':
+      return null
+    default:
+      return state
+  }
 }

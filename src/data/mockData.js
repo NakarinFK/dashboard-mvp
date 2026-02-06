@@ -58,6 +58,15 @@ export const accounts = [
   },
 ]
 
+export const categories = [
+  { id: 'cat-food', name: 'Food and Drinks', disabled: false },
+  { id: 'cat-transport', name: 'Transportation', disabled: false },
+  { id: 'cat-subscription', name: 'Subscription', disabled: false },
+  { id: 'cat-home', name: 'Home', disabled: false },
+  { id: 'cat-shopping', name: 'Shopping', disabled: false },
+  { id: 'cat-uncategorized', name: 'Uncategorized', disabled: false },
+]
+
 export const subscriptions = [
   {
     name: 'Notion Plus',
