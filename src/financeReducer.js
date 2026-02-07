@@ -7,8 +7,6 @@ import {
 } from './data/mockData.js'
 import { deriveCycleId, getCurrentCycleId } from './utils/cycle.js'
 
-const STORAGE_KEY = 'financeState-v1'
-
 const DEFAULT_UNCATEGORIZED_ID = 'cat-uncategorized'
 
 const seedAccounts = mockAccounts.map((account, index) => ({
@@ -350,24 +348,15 @@ function resolveCategoryId(payload, categories, fallback) {
   return fallback ? DEFAULT_UNCATEGORIZED_ID : undefined
 }
 
-export function initFinanceState() {
-  if (typeof window === 'undefined') {
-    return seedState
+export function initFinanceState(snapshot) {
+  if (snapshot) {
+    return normalizeState(snapshot)
   }
-
-  const saved = localStorage.getItem(STORAGE_KEY)
-  if (!saved) return normalizeState(seedState)
-
-  try {
-    return normalizeState(JSON.parse(saved))
-  } catch (error) {
-    return seedState
-  }
+  return normalizeState(seedState)
 }
 
-export function persistFinanceState(state) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+export function persistFinanceState() {
+  return undefined
 }
 
 export function financeReducer(state, action) {

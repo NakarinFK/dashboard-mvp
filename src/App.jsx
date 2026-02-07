@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useReducer } from 'react'
 import Dashboard from './components/Dashboard.jsx'
-import {
-  financeReducer,
-  initFinanceState,
-  persistFinanceState,
-} from './financeReducer.js'
+import { financeReducer, initFinanceState } from './financeReducer.js'
 import {
   buildAccountSummaries,
   buildCashFlow,
@@ -13,16 +9,17 @@ import {
 } from './utils/financeSelectors.js'
 import { getCurrentCycleId } from './utils/cycle.js'
 import { navItems } from './data/mockData.js'
+import { persistenceAdapter } from './persistence/index.js'
 
-export default function App() {
+export default function App({ initialState }) {
   const [state, dispatch] = useReducer(
     financeReducer,
-    undefined,
+    initialState,
     initFinanceState
   )
 
   useEffect(() => {
-    persistFinanceState(state)
+    void persistenceAdapter.saveState(state)
   }, [state])
 
   const activeCycleId = useMemo(() => getCurrentCycleId(), [])

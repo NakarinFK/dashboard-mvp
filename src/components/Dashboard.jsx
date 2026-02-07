@@ -1,4 +1,4 @@
-import { useMemo, useReducer } from 'react'
+import { useMemo, useReducer, useRef } from 'react'
 import AccountsSection from './AccountsSection.jsx'
 import AddAccountForm from './AddAccountForm.jsx'
 import BudgetSection from './BudgetSection.jsx'
@@ -9,6 +9,7 @@ import PlanningCostSection from './PlanningCostSection.jsx'
 import TransactionsTable from './TransactionsTable.jsx'
 import TransactionForm from './TransactionForm.jsx'
 import { buildTransactionRows } from '../utils/financeSelectors.js'
+import { persistenceAdapter } from '../persistence/index.js'
 
 export default function Dashboard({
   navItems,
@@ -29,6 +30,7 @@ export default function Dashboard({
     selectionReducer,
     null
   )
+  const fileInputRef = useRef(null)
 
   const handleEdit = (id) => {
     const transaction = rawTransactions.find((item) => item.id === id)
@@ -91,6 +93,54 @@ export default function Dashboard({
     dispatch({ type: 'ADD_TRANSACTION', payload })
   }
 
+  const handleExport = async () => {
+    try {
+      const payload = await persistenceAdapter.exportData()
+      const json = JSON.stringify(payload, null, 2)
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'finance-dashboard-export.json'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Export failed', error)
+      window.alert('Export failed. Please try again.')
+    }
+  }
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    event.target.value = ''
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text)
+      if (
+        !parsed ||
+        typeof parsed.version !== 'number' ||
+        parsed.app !== 'finance-dashboard' ||
+        !('state' in parsed)
+      ) {
+        window.alert('Invalid import file. Please select a valid export.')
+        return
+      }
+      await persistenceAdapter.backup()
+      await persistenceAdapter.importData(parsed)
+      window.location.reload()
+    } catch (error) {
+      console.error('Import failed', error)
+      window.alert('Import failed. Please try again.')
+    }
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-8">
       <header className="space-y-3">
@@ -110,6 +160,29 @@ export default function Dashboard({
             </span>
           ))}
         </nav>
+        <div className="flex justify-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleImportFile}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={handleImportClick}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm hover:text-slate-900"
+          >
+            Import Data
+          </button>
+          <button
+            type="button"
+            onClick={handleExport}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm hover:text-slate-900"
+          >
+            Export Data
+          </button>
+        </div>
       </header>
 
       <KpiGrid items={kpis} />
