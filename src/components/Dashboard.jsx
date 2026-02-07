@@ -6,7 +6,6 @@ import CashFlowSection from './CashFlowSection.jsx'
 import CategoryManager from './CategoryManager.jsx'
 import KpiGrid from './KpiGrid.jsx'
 import PlanningCostSection from './PlanningCostSection.jsx'
-import TimelineSection from './TimelineSection.jsx'
 import TransactionsTable from './TransactionsTable.jsx'
 import TransactionForm from './TransactionForm.jsx'
 import { buildTransactionRows } from '../utils/financeSelectors.js'
@@ -21,7 +20,6 @@ export default function Dashboard({
   planningCosts,
   cashFlow,
   transactions,
-  upcomingBills,
   formAccounts,
   rawTransactions,
   dispatch,
@@ -144,6 +142,8 @@ export default function Dashboard({
           <CategoryManager
             categories={categories}
             transactions={rawTransactions}
+            budgets={budgets}
+            planningCosts={planningCosts}
             dispatch={dispatch}
           />
         </div>
@@ -185,7 +185,6 @@ export default function Dashboard({
             onEdit={handleEdit}
             onDelete={handleDelete}
           />
-          <TimelineSection items={upcomingBills} />
         </div>
       </div>
     </div>

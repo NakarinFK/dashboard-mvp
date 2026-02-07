@@ -1,21 +1,44 @@
 import { useEffect, useReducer } from 'react'
 import SectionHeader from './SectionHeader.jsx'
+import {
+  buildCycleOptions,
+  deriveCycleId,
+  getCurrentCycleId,
+} from '../utils/cycle.js'
 
-const createFormState = (overrides = {}) => ({
-  type: 'expense',
-  amount: '',
-  fromAccount: '',
-  toAccount: '',
-  categoryId: '',
-  note: '',
-  date: new Date().toISOString().slice(0, 10),
-  isAddingCategory: false,
-  newCategoryName: '',
-  ...overrides,
-})
+const createFormState = (overrides = {}) => {
+  const baseState = {
+    type: 'expense',
+    amount: '',
+    fromAccount: '',
+    toAccount: '',
+    categoryId: '',
+    note: '',
+    date: new Date().toISOString().slice(0, 10),
+    isAddingCategory: false,
+    newCategoryName: '',
+    newCategoryType: 'expense',
+    cycleId: '',
+    cycleIsManual: false,
+  }
+  const finalType = overrides.type ?? baseState.type
+  const date = overrides.date ?? baseState.date
+  const cycleId = overrides.cycleId ?? deriveCycleId(date)
+  return {
+    ...baseState,
+    ...overrides,
+    date,
+    cycleId,
+    cycleIsManual: overrides.cycleIsManual ?? false,
+    newCategoryType:
+      overrides.newCategoryType ??
+      (finalType === 'income' ? 'income' : 'expense'),
+  }
+}
 
 function mapTransactionToForm(transaction) {
   if (!transaction) return createFormState()
+  const derivedCycleId = deriveCycleId(transaction.date)
   return createFormState({
     type: transaction.type || 'expense',
     amount: transaction.amount ? String(transaction.amount) : '',
@@ -24,6 +47,9 @@ function mapTransactionToForm(transaction) {
     categoryId: transaction.categoryId || '',
     note: transaction.note || '',
     date: transaction.date || new Date().toISOString().slice(0, 10),
+    cycleId: transaction.cycleId || derivedCycleId,
+    cycleIsManual:
+      Boolean(transaction.cycleId) && transaction.cycleId !== derivedCycleId,
   })
 }
 
@@ -37,6 +63,7 @@ function formReducer(state, action) {
         type: action.value,
         fromAccount: '',
         toAccount: '',
+        newCategoryType: action.value === 'income' ? 'income' : 'expense',
       }
     case 'RESET':
       return createFormState(action.value)
@@ -55,7 +82,7 @@ export default function TransactionForm({
   onCancel,
   dispatch,
 }) {
-  const defaultCategoryId = getDefaultCategoryId(categories)
+  const defaultCategoryId = getDefaultCategoryId(categories, 'expense')
   const [formState, dispatchForm] = useReducer(
     formReducer,
     undefined,
@@ -75,16 +102,26 @@ export default function TransactionForm({
 
   const showFromAccount = formState.type !== 'income'
   const showToAccount = formState.type !== 'expense'
-  const requiresCategory = true
-  const activeCategories = categories.filter((category) => !category.disabled)
-  const categorySelectValue = activeCategories.some(
-    (category) => category.id === formState.categoryId
-  )
-    ? formState.categoryId
-    : ''
-  const selectedCategory = categories.find(
-    (category) => category.id === formState.categoryId
-  )
+  const requiresCategory = formState.type !== 'transfer'
+  const categoryType = formState.type === 'income' ? 'income' : 'expense'
+  const currentCycleId = getCurrentCycleId()
+  const cycleOptions = buildCycleOptions(currentCycleId, 3)
+  const cycleSelectOptions =
+    formState.cycleId && !cycleOptions.includes(formState.cycleId)
+      ? [formState.cycleId, ...cycleOptions]
+      : cycleOptions
+  const filteredCategories = requiresCategory
+    ? categories.filter(
+        (category) =>
+          isCategoryActive(category) &&
+          matchesCategoryType(category, categoryType)
+      )
+    : []
+  const categorySelectValue =
+    requiresCategory &&
+    filteredCategories.some((category) => category.id === formState.categoryId)
+      ? formState.categoryId
+      : ''
   const validation = validateForm(formState, categories)
   const categoryWarning = getCategoryWarning(
     formState,
@@ -96,6 +133,34 @@ export default function TransactionForm({
     const { name, value } = event.target
     if (name === 'type') {
       dispatchForm({ type: 'SET_TYPE', value })
+      const shouldRequireCategory = value !== 'transfer'
+      if (!shouldRequireCategory) {
+        dispatchForm({ type: 'UPDATE', field: 'categoryId', value: '' })
+        dispatchForm({ type: 'UPDATE', field: 'isAddingCategory', value: false })
+        return
+      }
+      if (
+        formState.categoryId &&
+        !isCategoryValidForType(formState.categoryId, value, categories)
+      ) {
+        dispatchForm({ type: 'UPDATE', field: 'categoryId', value: '' })
+      }
+      return
+    }
+    if (name === 'cycleId') {
+      dispatchForm({ type: 'UPDATE', field: 'cycleId', value })
+      dispatchForm({ type: 'UPDATE', field: 'cycleIsManual', value: true })
+      return
+    }
+    if (name === 'date') {
+      dispatchForm({ type: 'UPDATE', field: 'date', value })
+      if (!formState.cycleIsManual) {
+        dispatchForm({
+          type: 'UPDATE',
+          field: 'cycleId',
+          value: deriveCycleId(value),
+        })
+      }
       return
     }
     dispatchForm({ type: 'UPDATE', field: name, value })
@@ -113,6 +178,7 @@ export default function TransactionForm({
       categoryId: formState.categoryId,
       note: formState.note,
       date: formState.date,
+      cycleId: formState.cycleId || deriveCycleId(formState.date),
     }
 
     if (formState.type === 'income') {
@@ -138,13 +204,20 @@ export default function TransactionForm({
 
   const handleAddCategory = () => {
     const trimmedName = formState.newCategoryName.trim()
+    const selectedType = formState.newCategoryType
+    if (!selectedType) return
     if (!trimmedName || !dispatch) return
     const newId = `cat-${Date.now().toString(36)}-${Math.random()
       .toString(36)
       .slice(2, 6)}`
     dispatch({
       type: 'ADD_CATEGORY',
-      payload: { id: newId, name: trimmedName },
+      payload: {
+        id: newId,
+        name: trimmedName,
+        type: selectedType,
+        active: true,
+      },
     })
     dispatchForm({ type: 'UPDATE', field: 'categoryId', value: newId })
     dispatchForm({ type: 'UPDATE', field: 'newCategoryName', value: '' })
@@ -241,67 +314,78 @@ export default function TransactionForm({
           </label>
         ) : null}
 
-        <label className="text-xs font-medium text-slate-600">
-          Category
-          <select
-            name="categoryId"
-            value={categorySelectValue}
-            onChange={handleChange}
-            className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-            required={requiresCategory}
-            disabled={!requiresCategory}
-          >
-            <option value="">Select category</option>
-            {activeCategories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-          {categoryWarning ? (
-            <p className="mt-1 text-[11px] text-rose-600">
-              {categoryWarning}
-            </p>
-          ) : null}
-          {validation.errors.categoryId ? (
-            <p className="mt-1 text-[11px] text-rose-600">
-              {validation.errors.categoryId}
-            </p>
-          ) : null}
-          <div className="mt-2 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() =>
-                dispatchForm({
-                  type: 'UPDATE',
-                  field: 'isAddingCategory',
-                  value: !formState.isAddingCategory,
-                })
-              }
-              className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+        {requiresCategory ? (
+          <label className="text-xs font-medium text-slate-600">
+            Category
+            <select
+              name="categoryId"
+              value={categorySelectValue}
+              onChange={handleChange}
+              className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+              required={requiresCategory}
             >
-              + Add Category
-            </button>
-          </div>
-          {formState.isAddingCategory ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <input
-                name="newCategoryName"
-                value={formState.newCategoryName}
-                onChange={handleChange}
-                className="flex-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
-                placeholder="New category name"
-              />
+              <option value="">Select category</option>
+              {filteredCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+            {categoryWarning ? (
+              <p className="mt-1 text-[11px] text-rose-600">
+                {categoryWarning}
+              </p>
+            ) : null}
+            {validation.errors.categoryId ? (
+              <p className="mt-1 text-[11px] text-rose-600">
+                {validation.errors.categoryId}
+              </p>
+            ) : null}
+            <div className="mt-2 flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleAddCategory}
-                className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600"
+                onClick={() =>
+                  dispatchForm({
+                    type: 'UPDATE',
+                    field: 'isAddingCategory',
+                    value: !formState.isAddingCategory,
+                  })
+                }
+                className="text-xs font-semibold text-slate-600 hover:text-slate-900"
               >
-                Add
+                + Add Category
               </button>
             </div>
-          ) : null}
-        </label>
+            {formState.isAddingCategory ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <input
+                  name="newCategoryName"
+                  value={formState.newCategoryName}
+                  onChange={handleChange}
+                  className="flex-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+                  placeholder="New category name"
+                />
+                <select
+                  name="newCategoryType"
+                  value={formState.newCategoryType}
+                  onChange={handleChange}
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+                  required
+                >
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={handleAddCategory}
+                  className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600"
+                >
+                  Add
+                </button>
+              </div>
+            ) : null}
+          </label>
+        ) : null}
 
         <label className="text-xs font-medium text-slate-600">
           Date
@@ -313,6 +397,22 @@ export default function TransactionForm({
             className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
             required
           />
+        </label>
+
+        <label className="text-xs font-medium text-slate-600">
+          Billing Cycle
+          <select
+            name="cycleId"
+            value={formState.cycleId}
+            onChange={handleChange}
+            className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+          >
+            {cycleSelectOptions.map((cycleId) => (
+              <option key={cycleId} value={cycleId}>
+                {cycleId}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label className="text-xs font-medium text-slate-600 sm:col-span-2">
@@ -391,16 +491,20 @@ function validateForm(state, categories) {
     }
   }
 
-  if (!state.categoryId) {
-    errors.categoryId = 'Select a category.'
-  } else {
-    const selected = categories.find(
-      (category) => category.id === state.categoryId
-    )
-    if (!selected) {
-      errors.categoryId = 'Select a valid category.'
-    } else if (selected.disabled) {
-      errors.categoryId = 'Selected category is disabled.'
+  if (state.type !== 'transfer') {
+    if (!state.categoryId) {
+      errors.categoryId = 'Select a category.'
+    } else {
+      const selected = categories.find(
+        (category) => category.id === state.categoryId
+      )
+      if (!selected) {
+        errors.categoryId = 'Select a valid category.'
+      } else if (!isCategoryActive(selected)) {
+        errors.categoryId = 'Selected category is inactive.'
+      } else if (!matchesCategoryType(selected, state.type)) {
+        errors.categoryId = `Select an ${state.type} category.`
+      }
     }
   }
 
@@ -412,20 +516,46 @@ function validateForm(state, categories) {
   }
 }
 
-function getDefaultCategoryId(categories) {
-  const uncategorized = categories.find(
-    (category) => category.id === 'cat-uncategorized' && !category.disabled
+function getDefaultCategoryId(categories, type = 'expense') {
+  const firstMatch = categories.find(
+    (category) =>
+      isCategoryActive(category) && matchesCategoryType(category, type)
   )
-  if (uncategorized) return uncategorized.id
-  const firstActive = categories.find((category) => !category.disabled)
-  return firstActive ? firstActive.id : ''
+  return firstMatch ? firstMatch.id : ''
 }
 
 function getCategoryWarning(state, categories, editingTransaction) {
   if (!editingTransaction) return ''
+  if (state.type === 'transfer') return ''
   if (!state.categoryId) return 'This transaction needs a category.'
   const category = categories.find((item) => item.id === state.categoryId)
   if (!category) return 'This category no longer exists. Choose another.'
-  if (category.disabled) return 'This category is disabled. Choose another.'
+  if (!isCategoryActive(category)) {
+    return 'This category is inactive. Choose another.'
+  }
+  if (!matchesCategoryType(category, state.type)) {
+    return `Choose an ${state.type} category.`
+  }
   return ''
+}
+
+function isCategoryActive(category) {
+  if (!category) return false
+  if (typeof category.disabled === 'boolean') return !category.disabled
+  if (typeof category.active === 'boolean') return category.active
+  return true
+}
+
+function matchesCategoryType(category, type) {
+  if (!category) return false
+  if (!category.type) return type === 'expense'
+  return category.type === type
+}
+
+function isCategoryValidForType(categoryId, type, categories) {
+  const category = categories.find((item) => item.id === categoryId)
+  if (!category) return false
+  if (!isCategoryActive(category)) return false
+  if (type === 'transfer') return false
+  return matchesCategoryType(category, type)
 }

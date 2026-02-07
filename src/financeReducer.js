@@ -5,6 +5,7 @@ import {
   subscriptions as mockSubscriptions,
   transactions as mockTransactions,
 } from './data/mockData.js'
+import { deriveCycleId, getCurrentCycleId } from './utils/cycle.js'
 
 const STORAGE_KEY = 'financeState-v1'
 
@@ -163,19 +164,6 @@ function createCategoryId(name, categories) {
     counter += 1
   }
   return candidate
-}
-
-function getCurrentCycleId() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
-
-function deriveCycleId(dateValue) {
-  const date = new Date(dateValue || Date.now())
-  if (Number.isNaN(date.getTime())) {
-    return getCurrentCycleId()
-  }
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
 function buildBudgetMap(categories, budgetCategories) {
@@ -463,11 +451,14 @@ export function financeReducer(state, action) {
         return state
       }
       const id = payload.id || createCategoryId(name, state.categories)
+      const type = payload.type === 'income' ? 'income' : 'expense'
+      const active =
+        typeof payload.active === 'boolean' ? payload.active : true
       return {
         ...state,
         categories: [
           ...state.categories,
-          { id, name, disabled: false },
+          { id, name, type, active, disabled: false },
         ],
       }
     }
@@ -480,7 +471,13 @@ export function financeReducer(state, action) {
       return {
         ...state,
         categories: state.categories.map((category) =>
-          category.id === payload.id ? { ...category, name } : category
+          category.id === payload.id
+            ? {
+                ...category,
+                name,
+                type: payload.type || category.type,
+              }
+            : category
         ),
       }
     }
@@ -502,6 +499,27 @@ export function financeReducer(state, action) {
         categories: state.categories.map((category) =>
           category.id === id ? { ...category, disabled: false } : category
         ),
+      }
+    }
+    case 'DELETE_CATEGORY': {
+      const id = action.payload?.id
+      if (!id) return state
+      const budgets = Array.isArray(state.budgets) ? state.budgets : []
+      const cleanedBudgets = budgets.map((profile) => {
+        if (!profile?.budgets) {
+          return profile
+        }
+        if (!Object.prototype.hasOwnProperty.call(profile.budgets, id)) {
+          return profile
+        }
+        const nextBudgets = { ...profile.budgets }
+        delete nextBudgets[id]
+        return { ...profile, budgets: nextBudgets }
+      })
+      return {
+        ...state,
+        categories: state.categories.filter((category) => category.id !== id),
+        budgets: cleanedBudgets,
       }
     }
     case 'UPDATE_BUDGET': {

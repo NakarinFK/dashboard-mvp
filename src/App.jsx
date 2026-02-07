@@ -11,7 +11,8 @@ import {
   buildKpis,
   buildTransactionRows,
 } from './utils/financeSelectors.js'
-import { navItems, upcomingBills } from './data/mockData.js'
+import { getCurrentCycleId } from './utils/cycle.js'
+import { navItems } from './data/mockData.js'
 
 export default function App() {
   const [state, dispatch] = useReducer(
@@ -88,16 +89,10 @@ export default function App() {
         planningCosts={state.planningCosts}
         cashFlow={derived.cashFlow}
         transactions={derived.transactions}
-        upcomingBills={upcomingBills}
         formAccounts={state.accounts}
         rawTransactions={state.transactions}
         dispatch={dispatch}
       />
     </div>
   )
-}
-
-function getCurrentCycleId() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
