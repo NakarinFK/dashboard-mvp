@@ -11,7 +11,7 @@ import { getCurrentCycleId } from './utils/cycle.js'
 import { navItems } from './data/mockData.js'
 import { persistenceAdapter } from './persistence/index.js'
 
-export default function App({ initialState }) {
+export default function App({ initialState, initialLayoutState }) {
   const [state, dispatch] = useReducer(
     financeReducer,
     initialState,
@@ -89,6 +89,7 @@ export default function App({ initialState }) {
         formAccounts={state.accounts}
         rawTransactions={state.transactions}
         dispatch={dispatch}
+        initialLayoutState={initialLayoutState}
       />
     </div>
   )

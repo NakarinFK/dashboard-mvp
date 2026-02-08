@@ -1,6 +1,8 @@
 import { createSqliteDatabase } from './sqliteDriver.js'
 
 const STATE_KEY = 'financeState-v1'
+const LAYOUT_KEY = 'layoutState-v1'
+const COVER_KEY = 'coverImage-v1'
 const LEGACY_STORAGE_KEY = 'financeState-v1'
 const APP_ID = 'finance-dashboard'
 const VERSION = 1
@@ -69,8 +71,12 @@ async function initDatabase() {
 }
 
 function readStateRow(db) {
+  return readRow(db, STATE_KEY)
+}
+
+function readRow(db, id) {
   const stmt = db.prepare('SELECT json FROM app_state WHERE id = ?')
-  stmt.bind([STATE_KEY])
+  stmt.bind([id])
   let value = null
   if (stmt.step()) {
     const row = stmt.getAsObject()
@@ -81,10 +87,14 @@ function readStateRow(db) {
 }
 
 function writeStateRow(db, json) {
+  writeRow(db, STATE_KEY, json)
+}
+
+function writeRow(db, id, json) {
   const stmt = db.prepare(
     'INSERT OR REPLACE INTO app_state (id, json, updated_at) VALUES (?, ?, ?)'
   )
-  stmt.bind([STATE_KEY, json, new Date().toISOString()])
+  stmt.bind([id, json, new Date().toISOString()])
   stmt.step()
   stmt.free()
 }
@@ -96,7 +106,7 @@ async function persistDatabase(db) {
 
 async function migrateLegacyLocalStorage(db) {
   if (!hasLocalStorage()) return
-  const existing = readStateRow(db)
+  const existing = readRow(db, STATE_KEY)
   if (existing) return
   const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY)
   if (!legacy) return
@@ -108,6 +118,34 @@ async function migrateLegacyLocalStorage(db) {
   writeStateRow(db, JSON.stringify(parsed))
   await persistDatabase(db)
   window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+}
+
+export async function loadLayoutState() {
+  const db = await getDatabase()
+  const raw = readRow(db, LAYOUT_KEY)
+  if (!raw) return null
+  const parsed = safeParse(raw)
+  return parsed ?? null
+}
+
+export async function saveLayoutState(layout) {
+  if (typeof layout === 'undefined') return
+  const db = await getDatabase()
+  writeRow(db, LAYOUT_KEY, JSON.stringify(layout))
+  await persistDatabase(db)
+}
+
+export async function loadCoverImage() {
+  const db = await getDatabase()
+  const raw = readRow(db, COVER_KEY)
+  if (!raw) return null
+  return safeParse(raw)
+}
+
+export async function saveCoverImage(value) {
+  const db = await getDatabase()
+  writeRow(db, COVER_KEY, JSON.stringify(value ?? null))
+  await persistDatabase(db)
 }
 
 function buildEnvelope(state) {

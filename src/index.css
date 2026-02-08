@@ -6,13 +6,69 @@
 
 :root {
   color-scheme: light;
+  --bg: #f8fafc;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --surface: #ffffff;
+  --surface-muted: #f1f5f9;
+  --border: #e2e8f0;
+  --border-strong: #cbd5f5;
+  --ghost: rgba(255, 255, 255, 0.75);
+  --column-over: rgba(15, 23, 42, 0.04);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #181818;
+  --text: #ffffff;
+  --text-muted: #b3b3b3;
+  --surface: #282828;
+  --surface-muted: #202020;
+  --border: #404040;
+  --border-strong: #404040;
+  --ghost: rgba(32, 32, 32, 0.7);
+  --column-over: rgba(48, 48, 48, 0.6);
 }
 
 body {
   margin: 0;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--bg);
+  color: var(--text);
   font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+}
+
+:root[data-theme='dark'] .bg-slate-50 {
+  background-color: var(--bg);
+}
+
+:root[data-theme='dark'] .bg-slate-100 {
+  background-color: var(--surface-muted);
+}
+
+:root[data-theme='dark'] .bg-white {
+  background-color: var(--surface);
+}
+
+:root[data-theme='dark'] .text-slate-900 {
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .text-slate-700,
+:root[data-theme='dark'] .text-slate-600,
+:root[data-theme='dark'] .text-slate-500 {
+  color: var(--text-muted);
+}
+
+:root[data-theme='dark'] .text-slate-400 {
+  color: #8a8a8a;
+}
+
+:root[data-theme='dark'] .border-slate-200 {
+  border-color: var(--border);
+}
+
+:root[data-theme='dark'] .border-slate-100 {
+  border-color: var(--border);
 }
 
 h1,

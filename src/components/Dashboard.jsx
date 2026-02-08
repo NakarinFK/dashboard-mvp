@@ -1,18 +1,17 @@
-import { useMemo, useReducer, useRef } from 'react'
-import AccountsSection from './AccountsSection.jsx'
-import AddAccountForm from './AddAccountForm.jsx'
-import BudgetSection from './BudgetSection.jsx'
-import CashFlowSection from './CashFlowSection.jsx'
-import CategoryManager from './CategoryManager.jsx'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import KpiGrid from './KpiGrid.jsx'
-import PlanningCostSection from './PlanningCostSection.jsx'
-import TransactionsTable from './TransactionsTable.jsx'
-import TransactionForm from './TransactionForm.jsx'
 import { buildTransactionRows } from '../utils/financeSelectors.js'
-import { persistenceAdapter } from '../persistence/index.js'
+import {
+  persistenceAdapter,
+  saveLayoutState,
+  loadCoverImage,
+  saveCoverImage,
+} from '../persistence/index.js'
+import DashboardLayout from '../ui/layout/DashboardLayout.tsx'
+import { DEFAULT_LAYOUT } from '../ui/layout/defaultLayout'
+import { layoutReducer, normalizeLayoutState } from '../ui/layout/layoutReducer'
 
 export default function Dashboard({
-  navItems,
   kpis,
   accounts,
   categories,
@@ -24,13 +23,21 @@ export default function Dashboard({
   formAccounts,
   rawTransactions,
   dispatch,
+  initialLayoutState,
 }) {
   const [editingTransaction, dispatchEdit] = useReducer(editReducer, null)
   const [selectedAccountId, dispatchSelection] = useReducer(
     selectionReducer,
     null
   )
+  const [layoutState, layoutDispatch] = useReducer(
+    layoutReducer,
+    initialLayoutState || DEFAULT_LAYOUT,
+    normalizeLayoutState
+  )
+  const [coverImage, setCoverImage] = useState(null)
   const fileInputRef = useRef(null)
+  const coverInputRef = useRef(null)
 
   const handleEdit = (id) => {
     const transaction = rawTransactions.find((item) => item.id === id)
@@ -93,6 +100,42 @@ export default function Dashboard({
     dispatch({ type: 'ADD_TRANSACTION', payload })
   }
 
+  const handleToggleVisibility = (id) => {
+    layoutDispatch({
+      type: 'TOGGLE_BLOCK_VISIBILITY',
+      payload: { id },
+    })
+  }
+
+  const handleResetLayout = () => {
+    layoutDispatch({ type: 'RESET_LAYOUT' })
+  }
+
+  const handleMoveBlock = (payload) => {
+    layoutDispatch({
+      type: 'MOVE_BLOCK',
+      payload,
+    })
+  }
+
+  const handleAddColumn = () => {
+    layoutDispatch({ type: 'ADD_COLUMN' })
+  }
+
+  const handleRemoveColumn = (payload) => {
+    layoutDispatch({
+      type: 'REMOVE_COLUMN',
+      payload,
+    })
+  }
+
+  const handleSetBlockWidth = (id, width) => {
+    layoutDispatch({
+      type: 'SET_BLOCK_WIDTH',
+      payload: { blockId: id, width },
+    })
+  }
+
   const handleExport = async () => {
     try {
       const payload = await persistenceAdapter.exportData()
@@ -110,6 +153,29 @@ export default function Dashboard({
       console.error('Export failed', error)
       window.alert('Export failed. Please try again.')
     }
+  }
+
+  const blockContext = {
+    accounts,
+    categories,
+    budgets,
+    activeCycleId,
+    planningCosts,
+    cashFlow,
+    transactions,
+    formAccounts,
+    rawTransactions,
+    dispatch,
+    selectedAccountId,
+    selectedAccountName: selectedAccount?.name || 'Selected Account',
+    onSelectAccount: handleSelectAccount,
+    onClearSelection: handleClearSelection,
+    editingTransaction,
+    onSubmitTransaction: handleSubmit,
+    onCancelEdit: handleCancelEdit,
+    onEditTransaction: handleEdit,
+    onDeleteTransaction: handleDelete,
+    visibleTransactions,
   }
 
   const handleImportClick = () => {
@@ -141,25 +207,71 @@ export default function Dashboard({
     }
   }
 
+  useEffect(() => {
+    void saveLayoutState(layoutState)
+  }, [layoutState])
+
+  useEffect(() => {
+    let cancelled = false
+    const loadCover = async () => {
+      const stored = await loadCoverImage()
+      if (!cancelled) {
+        setCoverImage(stored || null)
+      }
+    }
+    void loadCover()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleCoverPick = () => {
+    coverInputRef.current?.click()
+  }
+
+  const handleCoverRemove = async () => {
+    setCoverImage(null)
+    await saveCoverImage(null)
+  }
+
+  const handleCoverFile = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    event.target.value = ''
+    if (!file.type.startsWith('image/')) return
+    const dataUrl = await readFileAsDataUrl(file)
+    setCoverImage(dataUrl)
+    await saveCoverImage(dataUrl)
+  }
+
   return (
-    <div className="mx-auto max-w-7xl space-y-8 px-6 py-8">
-      <header className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+    <div className="mx-auto max-w-[1440px] space-y-8 px-6 py-8">
+      <CoverHeader
+        coverImage={coverImage}
+        onChangeCover={handleCoverPick}
+        onRemoveCover={handleCoverRemove}
+      >
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleCoverFile}
+          className="hidden"
+        />
+        <p
+          className={`text-xs uppercase tracking-[0.3em] ${
+            coverImage ? 'text-white/80' : 'text-slate-400'
+          }`}
+        >
           Overview
         </p>
-        <h1 className="text-3xl font-semibold text-slate-900">
-          Money Trackers 12/2025
+        <h1
+          className={`text-3xl font-semibold ${
+            coverImage ? 'text-white' : 'text-slate-900'
+          }`}
+        >
+          Money Trackers
         </h1>
-        <nav className="flex flex-wrap gap-3 text-sm text-slate-600">
-          {navItems.map((item) => (
-            <span
-              key={item}
-              className="rounded-full bg-slate-100 px-3 py-1"
-            >
-              {item}
-            </span>
-          ))}
-        </nav>
         <div className="flex justify-end gap-2">
           <input
             ref={fileInputRef}
@@ -183,85 +295,87 @@ export default function Dashboard({
             Export Data
           </button>
         </div>
-      </header>
+      </CoverHeader>
 
       <KpiGrid items={kpis} />
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-        <div className="space-y-6 xl:col-span-7">
-          <AccountsSection
-            accounts={accounts}
-            onSelect={handleSelectAccount}
-            selectedAccountId={selectedAccountId}
-            dispatch={dispatch}
-            transactions={rawTransactions}
-            activeCycleId={activeCycleId}
-          />
-          <AddAccountForm dispatch={dispatch} />
-          <PlanningCostSection
-            planningCosts={planningCosts}
-            categories={categories}
-            accounts={formAccounts}
-            activeCycleId={activeCycleId}
-            dispatch={dispatch}
-          />
-          <BudgetSection
-            categories={categories}
-            budgets={budgets}
-            activeCycleId={activeCycleId}
-            transactions={rawTransactions}
-            dispatch={dispatch}
-          />
-          <CategoryManager
-            categories={categories}
-            transactions={rawTransactions}
-            budgets={budgets}
-            planningCosts={planningCosts}
-            dispatch={dispatch}
-          />
-        </div>
-        <div className="space-y-6 xl:col-span-5">
-          <CashFlowSection
-            inflow={cashFlow.inflow}
-            outflow={cashFlow.outflow}
-            breakdown={cashFlow.breakdown}
-          />
-          <TransactionForm
-            accounts={formAccounts}
-            categories={categories}
-            editingTransaction={editingTransaction}
-            onSubmit={handleSubmit}
-            onCancel={handleCancelEdit}
-            dispatch={dispatch}
-          />
-          {selectedAccountId ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <span>
-                  Viewing transactions for{' '}
-                  <span className="font-semibold text-slate-900">
-                    {selectedAccount?.name || 'Selected Account'}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  onClick={handleClearSelection}
-                  className="text-xs font-semibold text-slate-600 hover:text-slate-900"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-          ) : null}
-          <TransactionsTable
-            rows={visibleTransactions}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-          />
-        </div>
-      </div>
+      <DashboardLayout
+        layoutState={layoutState}
+        blockContext={blockContext}
+        onMoveBlock={handleMoveBlock}
+        onToggleVisibility={handleToggleVisibility}
+        onResetLayout={handleResetLayout}
+        onAddColumn={handleAddColumn}
+        onRemoveColumn={handleRemoveColumn}
+        onSetBlockWidth={handleSetBlockWidth}
+      />
     </div>
   )
+}
+
+function CoverHeader({
+  coverImage,
+  onChangeCover,
+  onRemoveCover,
+  children,
+}) {
+  return (
+    <header
+      className={`group relative overflow-hidden ${
+        coverImage ? 'min-h-[180px] rounded-2xl' : ''
+      }`}
+    >
+      {coverImage ? (
+        <>
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${coverImage})` }}
+          />
+          <div className="absolute inset-0 bg-black/45" />
+        </>
+      ) : null}
+      <div
+        className={`relative space-y-3 ${
+          coverImage ? 'px-6 py-6' : 'px-0 py-0'
+        }`}
+      >
+        {children}
+      </div>
+      <div
+        className="absolute right-4 top-4 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        <button
+          type="button"
+          onClick={onChangeCover}
+          className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+            coverImage
+              ? 'border-white/30 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20'
+              : 'border-slate-200 bg-white text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Change cover
+        </button>
+        {coverImage ? (
+          <button
+            type="button"
+            onClick={onRemoveCover}
+            className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm hover:bg-white/20"
+          >
+            Remove
+          </button>
+        ) : null}
+      </div>
+    </header>
+  )
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
 }
 
 function editReducer(state, action) {
