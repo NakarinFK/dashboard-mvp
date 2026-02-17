@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import SectionHeader from './SectionHeader.jsx'
 import { formatCurrency } from '../utils/format.js'
 
@@ -17,6 +17,7 @@ export default function BudgetSection({
   dispatch,
 }) {
   const [inputValues, setInputValues] = useState({})
+  const isInitialized = useRef(false)
   
   const { spentByCategory, monthLabel, activeBudgetMap } = useMemo(() => {
     const label = formatCycleLabel(activeCycleId)
@@ -42,14 +43,17 @@ export default function BudgetSection({
     }
   }, [transactions, budgets, activeCycleId])
 
-  // Sync input values when budget map changes
+  // Initialize input values only on first mount
   useEffect(() => {
-    const newInputValues = {}
-    categories.forEach((category) => {
-      newInputValues[category.id] = String(Number(activeBudgetMap[category.id]) || 0)
-    })
-    setInputValues(newInputValues)
-  }, [activeBudgetMap, categories])
+    if (!isInitialized.current && categories.length > 0) {
+      const newInputValues = {}
+      categories.forEach((category) => {
+        newInputValues[category.id] = String(Number(activeBudgetMap[category.id]) || 0)
+      })
+      setInputValues(newInputValues)
+      isInitialized.current = true
+    }
+  }, [categories])
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
