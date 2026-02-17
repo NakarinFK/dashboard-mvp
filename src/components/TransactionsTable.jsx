@@ -27,18 +27,31 @@ function sortReducer(state, action) {
 export default function TransactionsTable({ rows, onEdit, onDelete }) {
   const [sort, dispatch] = useReducer(sortReducer, initialSort)
   const [recentExpensesLimit, setRecentExpensesLimit] = useState(20)
+  const [selectedCategory, setSelectedCategory] = useState('all')
   const showEdit = typeof onEdit === 'function'
   const showDelete = typeof onDelete === 'function'
 
+  const categories = useMemo(() => {
+    const uniqueCategories = [...new Set(rows.map((row) => row.category))]
+      .filter(Boolean)
+      .sort()
+    return uniqueCategories
+  }, [rows])
+
+  const filteredRows = useMemo(() => {
+    if (selectedCategory === 'all') return rows
+    return rows.filter((row) => row.category === selectedCategory)
+  }, [rows, selectedCategory])
+
   const sortedRows = useMemo(() => {
-    const sorted = [...rows].sort((a, b) => {
+    const sorted = [...filteredRows].sort((a, b) => {
       const aValue = getSortValue(a, sort.key)
       const bValue = getSortValue(b, sort.key)
       if (aValue === bValue) return 0
       return aValue > bValue ? 1 : -1
     })
     return sort.direction === 'asc' ? sorted : sorted.reverse()
-  }, [rows, sort])
+  }, [filteredRows, sort])
 
   const visibleRows = useMemo(
     () => sortedRows.slice(0, recentExpensesLimit),
@@ -52,24 +65,41 @@ export default function TransactionsTable({ rows, onEdit, onDelete }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SectionHeader
           title="Recent Expenses"
-          subtitle="Sortable table for quick review"
+          subtitle={`Sortable table for quick review${selectedCategory !== 'all' ? ` (${visibleRows.length} filtered)` : ''}`}
         />
-        <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-          <span>Show</span>
-          <select
-            value={recentExpensesLimit}
-            onChange={(event) =>
-              setRecentExpensesLimit(Number(event.target.value))
-            }
-            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600"
-          >
-            {[10, 20, 30, 50].map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+            <span>Category:</span>
+            <select
+              value={selectedCategory}
+              onChange={(event) => setSelectedCategory(event.target.value)}
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 min-w-[120px]"
+            >
+              <option value="all">All Categories</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+            <span>Show</span>
+            <select
+              value={recentExpensesLimit}
+              onChange={(event) =>
+                setRecentExpensesLimit(Number(event.target.value))
+              }
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600"
+            >
+              {[10, 20, 30, 50].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
       <div className="mt-4 overflow-x-auto">
         <table className="min-w-full text-left text-sm">
