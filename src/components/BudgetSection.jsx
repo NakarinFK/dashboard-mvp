@@ -2,6 +2,13 @@ import { useMemo } from 'react'
 import SectionHeader from './SectionHeader.jsx'
 import { formatCurrency } from '../utils/format.js'
 
+function getBudgetBarColor(percent) {
+  if (percent >= 100) return 'bg-red-500'
+  if (percent >= 61) return 'bg-orange-500'
+  if (percent >= 31) return 'bg-yellow-500'
+  return 'bg-green-500'
+}
+
 export default function BudgetSection({
   categories = [],
   budgets,
@@ -89,7 +96,7 @@ export default function BudgetSection({
               </div>
               <div className="h-2 w-full rounded-full bg-slate-100">
                 <div
-                  className="h-2 rounded-full bg-slate-900"
+                  className={`h-2 rounded-full transition-colors duration-200 ${getBudgetBarColor(percent)}`}
                   style={{ width: `${capped}%` }}
                 />
               </div>
