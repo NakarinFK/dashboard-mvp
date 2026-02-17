@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import SectionHeader from './SectionHeader.jsx'
 import { formatCurrency } from '../utils/format.js'
 
@@ -16,6 +16,8 @@ export default function BudgetSection({
   transactions = [],
   dispatch,
 }) {
+  const [inputValues, setInputValues] = useState({})
+  
   const { spentByCategory, monthLabel, activeBudgetMap } = useMemo(() => {
     const label = formatCycleLabel(activeCycleId)
     const map = new Map()
@@ -39,6 +41,15 @@ export default function BudgetSection({
       activeBudgetMap: budgetMap,
     }
   }, [transactions, budgets, activeCycleId])
+
+  // Sync input values when budget map changes
+  useEffect(() => {
+    const newInputValues = {}
+    categories.forEach((category) => {
+      newInputValues[category.id] = String(Number(activeBudgetMap[category.id]) || 0)
+    })
+    setInputValues(newInputValues)
+  }, [activeBudgetMap, categories])
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -68,17 +79,30 @@ export default function BudgetSection({
                       type="number"
                       min="0"
                       step="0.01"
-                      value={budgeted}
-                      onChange={(event) =>
+                      value={inputValues[item.id] || ''}
+                      onChange={(event) => {
+                        const newValue = event.target.value
+                        setInputValues(prev => ({
+                          ...prev,
+                          [item.id]: newValue
+                        }))
+                      }}
+                      onBlur={(event) => {
+                        const value = Number(event.target.value) || 0
                         dispatch({
                           type: 'UPDATE_BUDGET',
                           payload: {
                             cycleId: activeCycleId,
                             categoryId: item.id,
-                            amount: event.target.value,
+                            amount: value,
                           },
                         })
-                      }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.target.blur()
+                        }
+                      }}
                       className="w-24 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
                     />
                   </label>
