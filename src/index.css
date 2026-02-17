@@ -179,6 +179,90 @@ body {
   display: none;
 }
 
+/* Card Action Menu */
+.notion-menu-wrapper {
+  position: relative;
+}
+
+.notion-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 50;
+  min-width: 180px;
+  margin-top: 4px;
+  padding: 4px 0;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.08);
+  animation: notion-menu-in 0.12s ease;
+}
+
+@keyframes notion-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.notion-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s ease;
+  white-space: nowrap;
+}
+
+.notion-menu-item:hover {
+  background: var(--surface-muted);
+}
+
+.notion-menu-item .menu-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.notion-menu-item .menu-label {
+  flex: 1;
+}
+
+.notion-menu-item .menu-hint {
+  font-size: 11px;
+  color: var(--text-disabled);
+}
+
+.notion-menu-item.active {
+  color: var(--accent);
+}
+
+.notion-menu-item.active .menu-icon {
+  color: var(--accent);
+}
+
+.notion-menu-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
+.notion-menu-label {
+  padding: 4px 12px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-disabled);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* Resize handles */
 .notion-resize-handle {
   position: absolute;
@@ -220,6 +304,30 @@ body {
 .notion-drop-zone.active {
   border-color: var(--drop-indicator);
   background: var(--accent-light);
+}
+
+/* Between-card drop indicator */
+.notion-drop-indicator {
+  position: relative;
+}
+
+.notion-drop-indicator::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--drop-indicator);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.notion-drop-indicator.over::before {
+  opacity: 1;
 }
 
 /* Dark mode overrides */

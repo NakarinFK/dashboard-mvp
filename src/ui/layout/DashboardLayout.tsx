@@ -541,6 +541,113 @@ export default function DashboardLayout({
   )
 }
 
+function CardMenu({
+  blockId,
+  width,
+  isLayoutLocked,
+  onSetBlockWidth,
+  onToggleVisibility,
+}: {
+  blockId: string
+  width: BlockWidth
+  isLayoutLocked: boolean
+  onSetBlockWidth: (id: string, width: BlockWidth) => void
+  onToggleVisibility: (id: string) => void
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [isOpen])
+
+  const widthOptions: { value: BlockWidth; label: string }[] = [
+    { value: 'auto', label: 'Auto' },
+    { value: 'full', label: 'Full width' },
+    { value: 'half', label: 'Half' },
+    { value: 'third', label: 'Third' },
+  ]
+
+  return (
+    <div className="notion-menu-wrapper" ref={menuRef}>
+      <button
+        type="button"
+        className="card-action-btn"
+        onClick={() => setIsOpen((prev) => !prev)}
+        onPointerDown={(event: any) => event.stopPropagation()}
+        aria-label="More options"
+        title="More options"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="5" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="12" cy="19" r="2" />
+        </svg>
+      </button>
+      {isOpen ? (
+        <div className="notion-menu">
+          <div className="notion-menu-label">Size</div>
+          {widthOptions.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              className={`notion-menu-item ${width === opt.value ? 'active' : ''}`}
+              onClick={() => {
+                onSetBlockWidth(blockId, opt.value)
+                setIsOpen(false)
+              }}
+            >
+              <svg className="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {opt.value === 'full' && <><rect x="3" y="3" width="18" height="18" rx="2" /></>}
+                {opt.value === 'half' && <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="12" y1="3" x2="12" y2="21" /></>}
+                {opt.value === 'third' && <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="10" y1="3" x2="10" y2="21" /><line x1="14" y1="3" x2="14" y2="21" /></>}
+                {opt.value === 'auto' && <><rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="4 2" /></>}
+              </svg>
+              <span className="menu-label">{opt.label}</span>
+              {width === opt.value ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              ) : null}
+            </button>
+          ))}
+          <div className="notion-menu-divider" />
+          <button
+            type="button"
+            className="notion-menu-item"
+            onClick={() => {
+              if (!isLayoutLocked) onToggleVisibility(blockId)
+              setIsOpen(false)
+            }}
+            disabled={isLayoutLocked}
+          >
+            <svg className="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+              <line x1="1" y1="1" x2="23" y2="23" />
+            </svg>
+            <span className="menu-label">Hide block</span>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function SortableBlock({
   id,
   blockContext,
@@ -582,6 +689,7 @@ function SortableBlock({
     transform,
     transition,
     isDragging,
+    isOver,
   } = useSortable({ id, disabled: locked || isLayoutLocked })
 
   if (!definition) return null
@@ -638,9 +746,9 @@ function SortableBlock({
     <div
       ref={setNodeRef}
       style={{ ...style, ...widthStyle }}
-      className={`group relative self-start transition-all duration-200 ${
-        isResizing ? 'opacity-90' : ''
-      } ${isLayoutLocked ? 'cursor-text' : ''}`}
+      className={`group relative self-start transition-all duration-200 notion-drop-indicator ${
+        isOver && !isDragging ? 'over' : ''
+      } ${isResizing ? 'opacity-90' : ''} ${isLayoutLocked ? 'cursor-text' : ''}`}
       {...attributes}
       tabIndex={locked ? -1 : 0}
       onKeyDown={handleKeyDown}
@@ -716,6 +824,14 @@ function SortableBlock({
                 <line x1="1" y1="1" x2="23" y2="23" />
               </svg>
             </button>
+            {/* More Menu */}
+            <CardMenu
+              blockId={id}
+              width={width}
+              isLayoutLocked={isLayoutLocked}
+              onSetBlockWidth={onSetBlockWidth}
+              onToggleVisibility={onToggleVisibility}
+            />
           </div>
         </div>
 
@@ -758,9 +874,31 @@ function SortableBlock({
         </>
       ) : null}
 
-      {/* Resize overlay */}
+      {/* Resize overlay + width tooltip */}
       {isResizing ? (
-        <div className="pointer-events-none absolute inset-0 rounded-lg border-2 border-[var(--accent)] bg-[var(--accent-light)] opacity-40" />
+        <>
+          <div className="pointer-events-none absolute inset-0 rounded-lg border-2 border-[var(--accent)] bg-[var(--accent-light)] opacity-40" />
+          <div
+            style={{
+              position: 'absolute',
+              top: '-28px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              padding: '2px 8px',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: '#fff',
+              background: 'var(--accent)',
+              borderRadius: '4px',
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+              zIndex: 30,
+              animation: 'notion-menu-in 0.1s ease',
+            }}
+          >
+            {effectiveWidth === 'auto' ? 'Auto' : effectiveWidth === 'full' ? '100%' : effectiveWidth === 'half' ? '50%' : '33%'}
+          </div>
+        </>
       ) : null}
     </div>
   )
