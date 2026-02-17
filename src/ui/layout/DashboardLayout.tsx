@@ -20,6 +20,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { BLOCK_CATALOG } from '../blocks/blockCatalog'
+import type { BlockId } from '../blocks/blockCatalog'
 import type { BlockWidth, LayoutColumn, LayoutState } from './layoutTypes'
 import type { BlockContext, BlockDefinition } from '../blocks/blockCatalog'
 import { useTheme } from '../theme/useTheme'
@@ -65,6 +66,15 @@ export default function DashboardLayout({
   const [isLayoutLocked, setIsLayoutLocked] = useState(false)
   const [activeColumnId, setActiveColumnId] = useState<string | null>(null)
   const [pointerX, setPointerX] = useState<number | null>(null)
+  const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set())
+  const toggleCollapse = (blockId: string) => {
+    setCollapsedBlocks((prev) => {
+      const next = new Set(prev)
+      if (next.has(blockId)) next.delete(blockId)
+      else next.add(blockId)
+      return next
+    })
+  }
   const columns = layoutState.columns
   const totalColumns = Math.max(columns.length, 1)
   const gridRef = useRef<HTMLDivElement | null>(null)
@@ -96,11 +106,11 @@ export default function DashboardLayout({
     })
   )
 
-  const collisionDetection = (args) => {
+  const collisionDetection = (args: any) => {
     const pointer = pointerWithin(args)
     if (pointer?.length) {
-      const blockCollision = pointer.find((entry) =>
-        blockIds.has(String(entry.id))
+      const blockCollision = pointer.find((entry: any) =>
+        blockIds.has(entry.id as BlockId)
       )
       return blockCollision ? [blockCollision] : pointer
     }
@@ -312,36 +322,74 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+    <div className="space-y-5">
+      {/* Notion-style Toolbar */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+          padding: '8px 12px',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: '8px',
+          boxShadow: 'var(--card-shadow)',
+        }}
+      >
+        {/* Hidden blocks */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
           {hiddenBlocks.length ? (
             <>
-              <span className="font-semibold text-slate-600">
-                Hidden blocks:
-              </span>
-              {hiddenBlocks.map((block) => (
+              <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>Hidden:</span>
+              {hiddenBlocks.map((block: any) => (
                 <button
                   key={block.id}
                   type="button"
                   onClick={() => onToggleVisibility(block.id)}
-                  className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text)] motion-safe:transition-colors motion-reduce:transition-none"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '3px 10px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: 'var(--accent)',
+                    background: 'var(--accent-light)',
+                    border: '1px solid transparent',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
                 >
-                  Show {getBlockLabel(block.id)}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                  {getBlockLabel(block.id)}
                 </button>
               ))}
             </>
           ) : (
-            <span>All blocks visible</span>
+            <span style={{ color: 'var(--text-disabled)', fontSize: '12px' }}>All blocks visible</span>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+
+        {/* Layout controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <button
             type="button"
             onClick={onAddColumn}
-            className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text)] motion-safe:transition-colors motion-reduce:transition-none"
+            className="card-action-btn"
+            style={{ width: 'auto', height: '28px', padding: '0 8px', fontSize: '12px', fontWeight: 500, gap: '4px', display: 'inline-flex', alignItems: 'center', borderRadius: '4px', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+            title="Add column"
           >
-            Add column
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add
           </button>
           <button
             type="button"
@@ -349,18 +397,22 @@ export default function DashboardLayout({
               const lastColumn = columns[columns.length - 1]
               if (!lastColumn) return
               if (columns.length <= 1) return
-              if (
-                window.confirm(
-                  'Remove the last column? (Only empty columns can be removed.)'
-                )
-              ) {
+              if (window.confirm('Remove the last column?')) {
                 onRemoveColumn({ id: lastColumn.id })
               }
             }}
-            className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text)] motion-safe:transition-colors motion-reduce:transition-none"
+            className="card-action-btn"
+            style={{ width: 'auto', height: '28px', padding: '0 8px', fontSize: '12px', fontWeight: 500, gap: '4px', display: 'inline-flex', alignItems: 'center', borderRadius: '4px', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+            title="Remove column"
           >
-            Remove column
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Remove
           </button>
+
+          <div style={{ width: '1px', height: '16px', background: 'var(--border)', margin: '0 4px' }} />
+
           <button
             type="button"
             onClick={() => {
@@ -368,25 +420,78 @@ export default function DashboardLayout({
                 onResetLayout()
               }
             }}
-            className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text)] motion-safe:transition-colors motion-reduce:transition-none"
+            className="card-action-btn"
+            style={{ width: 'auto', height: '28px', padding: '0 8px', fontSize: '12px', fontWeight: 500, gap: '4px', display: 'inline-flex', alignItems: 'center', borderRadius: '4px', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+            title="Reset layout"
           >
-            Reset layout
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="1 4 1 10 7 10" />
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+            </svg>
+            Reset
           </button>
           <button
             type="button"
-            onClick={() => setIsLayoutLocked((prev) => !prev)}
-            className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text)] motion-safe:transition-colors motion-reduce:transition-none"
+            onClick={() => setIsLayoutLocked((prev: any) => !prev)}
+            className="card-action-btn"
+            style={{
+              width: 'auto',
+              height: '28px',
+              padding: '0 8px',
+              fontSize: '12px',
+              fontWeight: 500,
+              gap: '4px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              borderRadius: '4px',
+              color: isLayoutLocked ? 'var(--accent)' : 'var(--text-muted)',
+              background: isLayoutLocked ? 'var(--accent-light)' : 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+            title={isLayoutLocked ? 'Unlock layout' : 'Lock layout'}
           >
-            {isLayoutLocked ? 'Unlock layout' : 'Lock layout'}{' '}
-            <span aria-hidden="true">{isLayoutLocked ? '🔒' : ''}</span>
+            {isLayoutLocked ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+              </svg>
+            )}
+            {isLayoutLocked ? 'Locked' : 'Lock'}
           </button>
+
+          <div style={{ width: '1px', height: '16px', background: 'var(--border)', margin: '0 4px' }} />
+
           <button
             type="button"
             onClick={toggleTheme}
             aria-label="Toggle theme"
-            className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text)] motion-safe:transition-colors motion-reduce:transition-none"
+            className="card-action-btn"
+            style={{ width: 'auto', height: '28px', padding: '0 8px', fontSize: '12px', fontWeight: 500, gap: '4px', display: 'inline-flex', alignItems: 'center', borderRadius: '4px', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}
           >
-            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            {theme === 'dark' ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+            )}
+            {theme === 'dark' ? 'Light' : 'Dark'}
           </button>
         </div>
       </div>
@@ -418,6 +523,8 @@ export default function DashboardLayout({
               isActive={activeColumnId === column.id}
               registerColumnRef={registerColumnRef}
               isLayoutLocked={isLayoutLocked}
+              collapsedBlocks={collapsedBlocks}
+              onToggleCollapse={toggleCollapse}
             />
           ))}
         </div>
@@ -446,6 +553,8 @@ function SortableBlock({
   onResizeStart,
   resizeState,
   isLayoutLocked,
+  isCollapsed,
+  onToggleCollapse,
 }: {
   id: keyof typeof BLOCK_CATALOG
   blockContext: BlockContext
@@ -462,6 +571,8 @@ function SortableBlock({
   ) => void
   resizeState: ResizeState | null
   isLayoutLocked: boolean
+  isCollapsed: boolean
+  onToggleCollapse: (blockId: string) => void
 }) {
   const definition: BlockDefinition | undefined = BLOCK_CATALOG[id]
   const {
@@ -521,99 +632,136 @@ function SortableBlock({
       onCancelDrag()
     }
   }
-  const dragListeners =
-    !isLayoutLocked && listeners
-      ? {
-          ...listeners,
-          onPointerDown: (event: React.PointerEvent) => {
-            const target = event.target as HTMLElement | null
-            if (
-              target?.closest(
-                'input, textarea, select, button, a, [contenteditable="true"]'
-              )
-            ) {
-              event.stopPropagation()
-              return
-            }
-            listeners.onPointerDown?.(event)
-          },
-          onKeyDown: (event: React.KeyboardEvent) => {
-            handleKeyDown(event)
-            listeners.onKeyDown?.(event)
-          },
-        }
-      : { onKeyDown: handleKeyDown }
+  const label = definition.label
 
   return (
     <div
       ref={setNodeRef}
       style={{ ...style, ...widthStyle }}
-      className={`group relative self-start motion-safe:transition-all motion-reduce:transition-none ${
+      className={`group relative self-start transition-all duration-200 ${
         isResizing ? 'opacity-90' : ''
       } ${isLayoutLocked ? 'cursor-text' : ''}`}
       {...attributes}
-      {...dragListeners}
       tabIndex={locked ? -1 : 0}
+      onKeyDown={handleKeyDown}
     >
-      <div
-        className={`absolute right-3 top-3 z-10 flex gap-2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto ${
-          isDragging ? 'opacity-60 pointer-events-auto' : ''
-        }`}
-      >
-        <button
-          type="button"
-          onClick={() => {
-            if (isLayoutLocked) return
-            onToggleVisibility(id)
+      <div className={`notion-card ${isDragging ? 'notion-card-dragging' : ''}`}>
+        {/* Card Header */}
+        <div className="notion-card-header">
+          {/* Drag Handle */}
+          {!locked && !isLayoutLocked ? (
+            <div
+              className="drag-handle"
+              {...(listeners || {})}
+              aria-label="Drag to reorder"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                <circle cx="4" cy="3" r="1.2" />
+                <circle cx="10" cy="3" r="1.2" />
+                <circle cx="4" cy="7" r="1.2" />
+                <circle cx="10" cy="7" r="1.2" />
+                <circle cx="4" cy="11" r="1.2" />
+                <circle cx="10" cy="11" r="1.2" />
+              </svg>
+            </div>
+          ) : null}
+
+          {/* Card Title */}
+          <span className="card-title">{label}</span>
+
+          {/* Card Actions */}
+          <div className="card-actions">
+            {/* Collapse/Expand */}
+            <button
+              type="button"
+              className="card-action-btn"
+              onClick={() => onToggleCollapse(id)}
+              onPointerDown={(event: any) => event.stopPropagation()}
+              aria-label={isCollapsed ? 'Expand block' : 'Collapse block'}
+              title={isCollapsed ? 'Expand' : 'Collapse'}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  transition: 'transform 0.2s ease',
+                  transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            {/* Hide */}
+            <button
+              type="button"
+              className="card-action-btn"
+              onClick={() => {
+                if (isLayoutLocked) return
+                onToggleVisibility(id)
+              }}
+              onPointerDown={(event: any) => event.stopPropagation()}
+              aria-label="Hide block"
+              disabled={isLayoutLocked}
+              title="Hide"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                <line x1="1" y1="1" x2="23" y2="23" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Card Body */}
+        <div
+          className="notion-card-body"
+          style={{
+            maxHeight: isCollapsed ? '0px' : '2000px',
+            overflow: 'hidden',
+            transition: 'max-height 0.25s ease',
           }}
-          onPointerDown={(event) => event.stopPropagation()}
-          aria-label="Hide block"
-          disabled={isLayoutLocked}
-          className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200"
         >
-          -
-        </button>
-      </div>
-      <div className="relative">
-        {isResizing ? (
-          <div className="pointer-events-none absolute inset-0 rounded-2xl border border-[var(--border-strong)] bg-[var(--ghost)] opacity-40" />
-        ) : null}
-        <button
-          type="button"
-          aria-label="Resize block"
-          onMouseDown={(event) => {
-            if (locked || isLayoutLocked) return
-            event.preventDefault()
-            event.stopPropagation()
-            onResizeStart(id, event.clientX, 'right')
-          }}
-          className={`absolute right-1 top-1/2 h-10 w-2 -translate-y-1/2 rounded-full bg-[var(--border)] opacity-0 shadow-sm motion-safe:transition-opacity motion-reduce:transition-none ${
-            locked || isLayoutLocked
-              ? 'pointer-events-none'
-              : 'pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto'
-          }`}
-          style={{ cursor: 'col-resize' }}
-        />
-        <button
-          type="button"
-          aria-label="Resize block"
-          onMouseDown={(event) => {
-            if (locked || isLayoutLocked) return
-            event.preventDefault()
-            event.stopPropagation()
-            onResizeStart(id, event.clientX, 'left')
-          }}
-          className={`absolute left-1 top-1/2 h-10 w-2 -translate-y-1/2 rounded-full bg-[var(--border)] opacity-0 shadow-sm motion-safe:transition-opacity motion-reduce:transition-none ${
-            locked || isLayoutLocked
-              ? 'pointer-events-none'
-              : 'pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto'
-          }`}
-          style={{ cursor: 'col-resize' }}
-        />
-        <div className="pt-8">
           <Component {...props} />
         </div>
       </div>
+
+      {/* Resize Handles */}
+      {!locked && !isLayoutLocked ? (
+        <>
+          <button
+            type="button"
+            aria-label="Resize block right"
+            onMouseDown={(event: any) => {
+              event.preventDefault()
+              event.stopPropagation()
+              onResizeStart(id, event.clientX, 'right')
+            }}
+            className="notion-resize-handle right"
+          />
+          <button
+            type="button"
+            aria-label="Resize block left"
+            onMouseDown={(event: any) => {
+              event.preventDefault()
+              event.stopPropagation()
+              onResizeStart(id, event.clientX, 'left')
+            }}
+            className="notion-resize-handle left"
+          />
+        </>
+      ) : null}
+
+      {/* Resize overlay */}
+      {isResizing ? (
+        <div className="pointer-events-none absolute inset-0 rounded-lg border-2 border-[var(--accent)] bg-[var(--accent-light)] opacity-40" />
+      ) : null}
     </div>
   )
 }
@@ -645,6 +793,8 @@ function Column({
   isActive,
   registerColumnRef,
   isLayoutLocked,
+  collapsedBlocks,
+  onToggleCollapse,
 }: {
   column: LayoutColumn
   blockContext: BlockContext
@@ -662,6 +812,8 @@ function Column({
   isActive: boolean
   registerColumnRef: (columnId: string) => (node: HTMLDivElement | null) => void
   isLayoutLocked: boolean
+  collapsedBlocks: Set<string>
+  onToggleCollapse: (blockId: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id })
   const visibleBlocks = column.blocks.filter((block) => !isBlockHidden(block))
@@ -680,14 +832,12 @@ function Column({
     >
       {showGuides ? (
         <div
-          className={`pointer-events-none absolute inset-0 rounded-2xl border border-dashed motion-safe:transition-colors motion-reduce:transition-none ${
-            highlight
-              ? 'border-[var(--border-strong)] bg-[var(--column-over)]'
-              : 'border-[var(--border)] bg-transparent'
+          className={`notion-drop-zone pointer-events-none absolute inset-0 transition-all duration-200 ${
+            highlight ? 'active' : ''
           }`}
         />
       ) : null}
-      <div className="relative z-10 flex flex-col gap-6 pt-8">
+      <div className="relative z-10 flex flex-col gap-5">
         <SortableContext items={items} strategy={verticalListSortingStrategy}>
           {visibleBlocks.map((block) => (
             <SortableBlock
@@ -703,6 +853,8 @@ function Column({
               onResizeStart={onResizeStart}
               resizeState={resizeState}
               isLayoutLocked={isLayoutLocked}
+              isCollapsed={collapsedBlocks.has(block.id)}
+              onToggleCollapse={onToggleCollapse}
             />
           ))}
         </SortableContext>
@@ -837,9 +989,30 @@ function GhostBlock({
   const widthStyle = getWidthStyle(width)
   return (
     <div className="pointer-events-none" style={widthStyle}>
-      <div className="origin-top-left scale-[0.98] motion-safe:transition-transform motion-reduce:transition-none">
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--ghost)] px-4 py-3 text-sm font-semibold text-[var(--text)] opacity-70 shadow-lg">
-          {getBlockLabel(id)}
+      <div
+        style={{
+          transform: 'scale(0.98) rotate(1deg)',
+          transformOrigin: 'top left',
+          transition: 'transform 0.15s ease',
+        }}
+      >
+        <div
+          className="notion-card notion-card-dragging"
+          style={{ padding: '10px 14px', opacity: 0.85 }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="var(--drag-handle)">
+              <circle cx="4" cy="3" r="1.2" />
+              <circle cx="10" cy="3" r="1.2" />
+              <circle cx="4" cy="7" r="1.2" />
+              <circle cx="10" cy="7" r="1.2" />
+              <circle cx="4" cy="11" r="1.2" />
+              <circle cx="10" cy="11" r="1.2" />
+            </svg>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)', textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>
+              {getBlockLabel(id)}
+            </span>
+          </div>
         </div>
       </div>
     </div>

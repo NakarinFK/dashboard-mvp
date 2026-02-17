@@ -8,6 +8,7 @@ export type LayoutBlock = {
   locked?: boolean
   width?: BlockWidth
   visible?: boolean
+  collapsed?: boolean
 }
 
 export type LayoutColumn = {
@@ -54,4 +55,10 @@ export type LayoutAction =
     }
   | {
       type: 'RESET_LAYOUT'
+    }
+  | {
+      type: 'TOGGLE_COLLAPSE'
+      payload: {
+        id: BlockId
+      }
     }

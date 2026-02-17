@@ -147,6 +147,21 @@ export function layoutReducer(
     }
     case 'RESET_LAYOUT':
       return cloneLayout(DEFAULT_LAYOUT)
+    case 'TOGGLE_COLLAPSE': {
+      const collapseId = action.payload?.id
+      if (!collapseId) return state
+      return {
+        ...state,
+        columns: state.columns.map((column) => ({
+          ...column,
+          blocks: column.blocks.map((block) =>
+            block.id === collapseId
+              ? { ...block, collapsed: !block.collapsed }
+              : block
+          ),
+        })),
+      }
+    }
     default:
       return state
   }
