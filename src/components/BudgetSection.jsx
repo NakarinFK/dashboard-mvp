@@ -127,23 +127,23 @@ export default function BudgetSection({
 
   return (
     <div ref={setNodeRef} style={style} className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2 flex-1 min-w-0">
           <div
             {...attributes}
             {...listeners}
-            className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600"
+            className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600 flex-shrink-0 mt-1"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-slate-900 truncate">
               {item.name}
             </p>
-            <label className="flex items-center gap-2 text-xs text-slate-500">
-              <span>Budget:</span>
+            <label className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+              <span className="flex-shrink-0">Budget:</span>
               <input
                 type="number"
                 min="0"
@@ -172,17 +172,17 @@ export default function BudgetSection({
                     event.target.blur()
                   }
                 }}
-                className="w-24 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+                className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 flex-shrink-0"
               />
             </label>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-start gap-2 flex-shrink-0">
           <div className="text-right">
-            <p className="text-sm font-semibold text-slate-900">
+            <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">
               {formatCurrency(spent)}
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 whitespace-nowrap">
               {remaining >= 0
                 ? `${formatCurrency(remaining)} left`
                 : `${formatCurrency(Math.abs(remaining))} over`}
@@ -191,7 +191,7 @@ export default function BudgetSection({
           <button
             type="button"
             onClick={() => toggleCategoryVisibility(item.id)}
-            className="p-1 text-slate-400 hover:text-slate-600"
+            className="p-1 text-slate-400 hover:text-slate-600 flex-shrink-0 mt-1"
             title="Hide category"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
