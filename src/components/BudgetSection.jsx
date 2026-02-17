@@ -3,10 +3,10 @@ import SectionHeader from './SectionHeader.jsx'
 import { formatCurrency } from '../utils/format.js'
 
 function getBudgetBarColor(percent) {
-  if (percent >= 100) return 'bg-red-500'
-  if (percent >= 61) return 'bg-orange-500'
-  if (percent >= 31) return 'bg-yellow-500'
-  return 'bg-green-500'
+  if (percent >= 100) return 'bg-red-600'
+  if (percent >= 61) return 'bg-orange-600'
+  if (percent >= 31) return 'bg-yellow-600'
+  return 'bg-green-600'
 }
 
 export default function BudgetSection({
