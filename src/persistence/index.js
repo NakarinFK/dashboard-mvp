@@ -75,6 +75,16 @@ function readStateRow(db) {
 }
 
 function readRow(db, id) {
+  // Validate input to prevent SQL injection
+  if (!id || typeof id !== 'string' || id.length > 255) {
+    throw new Error('Invalid ID parameter')
+  }
+  
+  // Only allow alphanumeric characters, hyphens, and underscores
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+    throw new Error('Invalid ID format')
+  }
+  
   const stmt = db.prepare('SELECT json FROM app_state WHERE id = ?')
   stmt.bind([id])
   let value = null
@@ -91,6 +101,25 @@ function writeStateRow(db, json) {
 }
 
 function writeRow(db, id, json) {
+  // Validate inputs to prevent SQL injection
+  if (!id || typeof id !== 'string' || id.length > 255) {
+    throw new Error('Invalid ID parameter')
+  }
+  
+  // Only allow alphanumeric characters, hyphens, and underscores
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+    throw new Error('Invalid ID format')
+  }
+  
+  if (typeof json !== 'string') {
+    throw new Error('Invalid JSON parameter')
+  }
+  
+  // Limit JSON size to prevent storage attacks
+  if (json.length > 10 * 1024 * 1024) { // 10MB limit
+    throw new Error('JSON data too large')
+  }
+  
   const stmt = db.prepare(
     'INSERT OR REPLACE INTO app_state (id, json, updated_at) VALUES (?, ?, ?)'
   )
@@ -106,18 +135,39 @@ async function persistDatabase(db) {
 
 async function migrateLegacyLocalStorage(db) {
   if (!hasLocalStorage()) return
+  
+  // Validate STATE_KEY before using
+  if (!STATE_KEY || typeof STATE_KEY !== 'string') {
+    throw new Error('Invalid STATE_KEY')
+  }
+  
   const existing = readRow(db, STATE_KEY)
   if (existing) return
+  
   const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY)
   if (!legacy) return
+  
+  // Validate legacy data size
+  if (legacy.length > 10 * 1024 * 1024) { // 10MB limit
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+    return
+  }
+  
   const parsed = safeParse(legacy)
   if (!parsed) {
     window.localStorage.removeItem(LEGACY_STORAGE_KEY)
     return
   }
-  writeStateRow(db, JSON.stringify(parsed))
-  await persistDatabase(db)
-  window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+  
+  try {
+    writeStateRow(db, JSON.stringify(parsed))
+    await persistDatabase(db)
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+  } catch (error) {
+    console.error('Failed to migrate legacy data:', error)
+    // Clean up legacy data even if migration fails
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+  }
 }
 
 export async function loadLayoutState() {

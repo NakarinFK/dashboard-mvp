@@ -1,12 +1,7 @@
-import { useEffect, useMemo, useReducer } from 'react'
+import { useEffect, useReducer, useMemo } from 'react'
 import Dashboard from './components/Dashboard.jsx'
-import { financeReducer, initFinanceState } from './financeReducer.js'
-import {
-  buildAccountSummaries,
-  buildCashFlow,
-  buildKpis,
-  buildTransactionRows,
-} from './utils/financeSelectors.js'
+import { financeReducer, initFinanceState } from './reducers/financeReducer.js'
+import { useDerivedData } from './hooks/useDerivedData.js'
 import { getCurrentCycleId } from './utils/cycle.js'
 import { navItems } from './data/mockData.js'
 import { persistenceAdapter } from './persistence/index.js'
@@ -18,61 +13,16 @@ export default function App({ initialState, initialLayoutState }) {
     initFinanceState
   )
 
+  // Debug: Log state to console
+  console.log('App state:', state)
+  console.log('State accounts:', state.accounts, typeof state.accounts, Array.isArray(state.accounts))
+
   useEffect(() => {
     void persistenceAdapter.saveState(state)
   }, [state])
 
   const activeCycleId = useMemo(() => getCurrentCycleId(), [])
-
-  const derived = useMemo(() => {
-    const activeProfile = (state.budgets || []).find(
-      (profile) => profile.cycleId === activeCycleId
-    )
-    const activeBudgetMap = activeProfile?.budgets || {}
-    const plannedTotal = (state.planningCosts || [])
-      .filter(
-        (cost) => cost.cycleId === activeCycleId && cost.status === 'planned'
-      )
-      .reduce((sum, cost) => sum + Number(cost.amount || 0), 0)
-    const spentTotal = state.transactions
-      .filter(
-        (transaction) =>
-          transaction.type === 'expense' &&
-          transaction.cycleId === activeCycleId
-      )
-      .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0)
-    const budgetTotal = Object.values(activeBudgetMap).reduce(
-      (sum, value) => sum + Number(value || 0),
-      0
-    )
-    return {
-      accounts: buildAccountSummaries(state.accounts, state.transactions),
-      transactions: buildTransactionRows(
-        state.transactions,
-        state.accounts,
-        state.categories
-      ),
-      cashFlow: buildCashFlow(state.transactions, state.categories),
-      activeBudgetMap,
-      budgetTotal,
-      spentTotal,
-      plannedTotal,
-      kpis: buildKpis({
-        accounts: state.accounts,
-        transactions: state.transactions,
-        budgetTotal,
-        spentTotal,
-        plannedTotal,
-      }),
-    }
-  }, [
-    state.accounts,
-    state.budgets,
-    state.categories,
-    state.transactions,
-    state.planningCosts,
-    activeCycleId,
-  ])
+  const derived = useDerivedData(state, activeCycleId)
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -80,14 +30,14 @@ export default function App({ initialState, initialLayoutState }) {
         navItems={navItems}
         kpis={derived.kpis}
         accounts={derived.accounts}
-        categories={state.categories}
-        budgets={state.budgets}
+        categories={state.categories || []}
+        budgets={state.budgets || []}
         activeCycleId={activeCycleId}
-        planningCosts={state.planningCosts}
+        planningCosts={state.planningCosts || []}
         cashFlow={derived.cashFlow}
         transactions={derived.transactions}
-        formAccounts={state.accounts}
-        rawTransactions={state.transactions}
+        formAccounts={state.accounts || []}
+        rawTransactions={state.transactions || []}
         dispatch={dispatch}
         initialLayoutState={initialLayoutState}
       />

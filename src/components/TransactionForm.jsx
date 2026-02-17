@@ -1,10 +1,25 @@
-import { useEffect, useReducer } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import SectionHeader from './SectionHeader.jsx'
+import {
+  isCategoryActive,
+  matchesCategoryType,
+  getDefaultCategoryId,
+  getCategoryWarning,
+  isCategoryValidForType,
+} from '../reducers/categoryUtils.js'
 import {
   buildCycleOptions,
   deriveCycleId,
   getCurrentCycleId,
 } from '../utils/cycle.js'
+import {
+  validateTextInput,
+  validateAmount,
+  validateDate,
+  validateCategoryId,
+  validateAccountId,
+  sanitizeNote,
+} from '../utils/validation.js'
 
 const createFormState = (overrides = {}) => {
   const baseState = {
@@ -88,6 +103,7 @@ export default function TransactionForm({
     undefined,
     () => createFormState({ categoryId: defaultCategoryId })
   )
+  const [errors, setErrors] = useState({})
 
   useEffect(() => {
     if (editingTransaction) {
@@ -122,7 +138,6 @@ export default function TransactionForm({
     filteredCategories.some((category) => category.id === formState.categoryId)
       ? formState.categoryId
       : ''
-  const validation = validateForm(formState, categories)
   const categoryWarning = getCategoryWarning(
     formState,
     categories,
@@ -166,27 +181,83 @@ export default function TransactionForm({
     dispatchForm({ type: 'UPDATE', field: name, value })
   }
 
+  const validateForm = () => {
+    const newErrors = {}
+    const accountIds = accounts.map(acc => acc.id)
+    const categoryIds = categories.map(cat => cat.id)
+
+    // Validate amount
+    const amountValidation = validateAmount(formState.amount)
+    if (!amountValidation.isValid) {
+      newErrors.amount = amountValidation.error
+    }
+
+    // Validate date
+    const dateValidation = validateDate(formState.date)
+    if (!dateValidation.isValid) {
+      newErrors.date = dateValidation.error
+    }
+
+    // Validate note
+    const noteValidation = sanitizeNote(formState.note)
+    if (!noteValidation.isValid) {
+      newErrors.note = noteValidation.error
+    }
+
+    // Validate accounts based on transaction type
+    if (formState.type === 'expense') {
+      const accountValidation = validateAccountId(formState.fromAccount, accountIds)
+      if (!accountValidation.isValid) {
+        newErrors.fromAccount = accountValidation.error
+      }
+    } else if (formState.type === 'income') {
+      const accountValidation = validateAccountId(formState.toAccount, accountIds)
+      if (!accountValidation.isValid) {
+        newErrors.toAccount = accountValidation.error
+      }
+    }
+
+    // Validate category if required
+    if (formState.type !== 'transfer') {
+      const categoryValidation = validateCategoryId(formState.categoryId, categoryIds)
+      if (!categoryValidation.isValid) {
+        newErrors.categoryId = categoryValidation.error
+      }
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
   const handleSubmit = (event) => {
     event.preventDefault()
-    if (!validation.isValid) return
-    const amount = Math.abs(Number(formState.amount) || 0)
-    if (!amount) return
+    
+    if (!validateForm()) {
+      return
+    }
 
+    const amountValidation = validateAmount(formState.amount)
+    const noteValidation = sanitizeNote(formState.note)
+    const dateValidation = validateDate(formState.date)
+    
+    const amount = amountValidation.sanitized
     const payload = {
       type: formState.type,
       amount,
       categoryId: formState.categoryId,
-      note: formState.note,
-      date: formState.date,
+      note: noteValidation.sanitized,
+      date: dateValidation.sanitized,
       cycleId: formState.cycleId || deriveCycleId(formState.date),
     }
 
     if (formState.type === 'income') {
-      payload.toAccount = formState.toAccount || null
+      const accountValidation = validateAccountId(formState.toAccount, accounts.map(acc => acc.id))
+      payload.toAccount = accountValidation.sanitized || null
     }
 
     if (formState.type === 'expense') {
-      payload.fromAccount = formState.fromAccount || null
+      const accountValidation = validateAccountId(formState.fromAccount, accounts.map(acc => acc.id))
+      payload.fromAccount = accountValidation.sanitized || null
     }
 
     if (formState.type === 'transfer') {
@@ -257,9 +328,9 @@ export default function TransactionForm({
             className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
             required
           />
-          {validation.errors.amount ? (
+          {errors.amount ? (
             <p className="mt-1 text-[11px] text-rose-600">
-              {validation.errors.amount}
+              {errors.amount}
             </p>
           ) : null}
         </label>
@@ -281,9 +352,9 @@ export default function TransactionForm({
                 </option>
               ))}
             </select>
-            {validation.errors.fromAccount ? (
+            {errors.fromAccount ? (
               <p className="mt-1 text-[11px] text-rose-600">
-                {validation.errors.fromAccount}
+                {errors.fromAccount}
               </p>
             ) : null}
           </label>
@@ -306,9 +377,9 @@ export default function TransactionForm({
                 </option>
               ))}
             </select>
-            {validation.errors.toAccount ? (
+            {errors.toAccount ? (
               <p className="mt-1 text-[11px] text-rose-600">
-                {validation.errors.toAccount}
+                {errors.toAccount}
               </p>
             ) : null}
           </label>
@@ -336,9 +407,9 @@ export default function TransactionForm({
                 {categoryWarning}
               </p>
             ) : null}
-            {validation.errors.categoryId ? (
+            {errors.categoryId ? (
               <p className="mt-1 text-[11px] text-rose-600">
-                {validation.errors.categoryId}
+                {errors.categoryId}
               </p>
             ) : null}
             <div className="mt-2 flex items-center gap-3">
@@ -427,11 +498,11 @@ export default function TransactionForm({
         </label>
 
         <div className="sm:col-span-2 flex items-center justify-end gap-3">
-          {!validation.isValid ? (
+          {Object.keys(errors).length > 0 && (
             <p className="mr-auto text-[11px] text-rose-600">
-              {validation.summary}
+              Please fix the errors above
             </p>
-          ) : null}
+          )}
           {editingTransaction ? (
             <button
               type="button"
@@ -443,7 +514,7 @@ export default function TransactionForm({
           ) : null}
           <button
             type="submit"
-            disabled={!validation.isValid}
+            disabled={Object.keys(errors).length > 0}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
           >
             {editingTransaction ? 'Update Transaction' : 'Add Transaction'}
@@ -514,48 +585,4 @@ function validateForm(state, categories) {
     errors,
     summary: isValid ? '' : 'Fix the highlighted fields before submitting.',
   }
-}
-
-function getDefaultCategoryId(categories, type = 'expense') {
-  const firstMatch = categories.find(
-    (category) =>
-      isCategoryActive(category) && matchesCategoryType(category, type)
-  )
-  return firstMatch ? firstMatch.id : ''
-}
-
-function getCategoryWarning(state, categories, editingTransaction) {
-  if (!editingTransaction) return ''
-  if (state.type === 'transfer') return ''
-  if (!state.categoryId) return 'This transaction needs a category.'
-  const category = categories.find((item) => item.id === state.categoryId)
-  if (!category) return 'This category no longer exists. Choose another.'
-  if (!isCategoryActive(category)) {
-    return 'This category is inactive. Choose another.'
-  }
-  if (!matchesCategoryType(category, state.type)) {
-    return `Choose an ${state.type} category.`
-  }
-  return ''
-}
-
-function isCategoryActive(category) {
-  if (!category) return false
-  if (typeof category.disabled === 'boolean') return !category.disabled
-  if (typeof category.active === 'boolean') return category.active
-  return true
-}
-
-function matchesCategoryType(category, type) {
-  if (!category) return false
-  if (!category.type) return type === 'expense'
-  return category.type === type
-}
-
-function isCategoryValidForType(categoryId, type, categories) {
-  const category = categories.find((item) => item.id === categoryId)
-  if (!category) return false
-  if (!isCategoryActive(category)) return false
-  if (type === 'transfer') return false
-  return matchesCategoryType(category, type)
 }

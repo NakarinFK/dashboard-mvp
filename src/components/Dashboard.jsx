@@ -10,6 +10,7 @@ import {
 import DashboardLayout from '../ui/layout/DashboardLayout.tsx'
 import { DEFAULT_LAYOUT } from '../ui/layout/defaultLayout'
 import { layoutReducer, normalizeLayoutState } from '../ui/layout/layoutReducer'
+import { validateFile, validateFileContent } from '../utils/fileValidation.js'
 
 export default function Dashboard({
   kpis,
@@ -186,24 +187,45 @@ export default function Dashboard({
     const file = event.target.files?.[0]
     if (!file) return
     event.target.value = ''
+    
     try {
-      const text = await file.text()
+      // Validate file type and size
+      const fileValidation = validateFile(file, {
+        allowedTypes: ['application/json'],
+        maxSize: 10 * 1024 * 1024, // 10MB
+      })
+      
+      if (!fileValidation.isValid) {
+        alert(`Invalid file: ${fileValidation.errors.join(', ')}`)
+        return
+      }
+      
+      // Validate file content
+      const contentValidation = await validateFileContent(fileValidation.sanitizedFile)
+      if (!contentValidation.isValid) {
+        alert(`File content validation failed: ${contentValidation.issues.join(', ')}`)
+        return
+      }
+      
+      const text = await fileValidation.sanitizedFile.text()
       const parsed = JSON.parse(text)
+      
       if (
         !parsed ||
         typeof parsed.version !== 'number' ||
         parsed.app !== 'finance-dashboard' ||
         !('state' in parsed)
       ) {
-        window.alert('Invalid import file. Please select a valid export.')
+        alert('Invalid import file. Please select a valid export.')
         return
       }
+      
       await persistenceAdapter.backup()
       await persistenceAdapter.importData(parsed)
       window.location.reload()
     } catch (error) {
       console.error('Import failed', error)
-      window.alert('Import failed. Please try again.')
+      alert('Import failed. Please try again.')
     }
   }
 
