@@ -10,16 +10,18 @@ export function ensureCategories(categories) {
 }
 
 export function ensureBudgets(budgets, categories) {
-  if (!Array.isArray(budgets)) {
-    const currentCycleId = getCurrentCycleId()
-    return [
-      {
-        cycleId: currentCycleId,
-        budgets: buildBudgetMap(categories, []),
-      },
-    ]
+  // Preserve persisted budgets; only create default if completely missing
+  if (Array.isArray(budgets) && budgets.length > 0) {
+    return budgets
   }
-  return budgets
+  // No budgets persisted: create a default empty budget for current cycle
+  const currentCycleId = getCurrentCycleId()
+  return [
+    {
+      cycleId: currentCycleId,
+      budgets: buildBudgetMap(categories, []),
+    },
+  ]
 }
 
 export function ensurePlanningCosts(planningCosts, categories) {
@@ -30,11 +32,17 @@ export function ensurePlanningCosts(planningCosts, categories) {
 }
 
 export function isCategoryActive(category) {
-  return category && category.active !== false
+  if (!category) return false
+  if (typeof category.disabled === 'boolean') return !category.disabled
+  if (typeof category.active === 'boolean') return category.active
+  return true
 }
 
 export function matchesCategoryType(category, type) {
-  return category && category.type === type
+  if (!category) return false
+  const expectedType = type === 'income' ? 'income' : 'expense'
+  const categoryType = category.type === 'income' ? 'income' : 'expense'
+  return categoryType === expectedType
 }
 
 export function getDefaultCategoryId(categories, type) {
@@ -53,8 +61,8 @@ export function getCategoryWarning(formState, categories, editingTransaction) {
     return 'This category is inactive.'
   }
   if (!matchesCategoryType(category, formState.type)) {
-    const expectedType = formState.type === 'income' ? 'income' : 'expense'
-    return `This is an ${category.type} category, but you're recording an ${formState.type}.`
+    const categoryType = category.type === 'income' ? 'income' : 'expense'
+    return `This is an ${categoryType} category, but you're recording an ${formState.type}.`
   }
   return ''
 }

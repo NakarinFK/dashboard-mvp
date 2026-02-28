@@ -1,10 +1,8 @@
 // Main finance reducer with optimized structure
-import { createSeedState } from './seedData.js'
 import { cloneAccounts, recalculateBalances, applyTransaction } from './accountUtils.js'
 import {
   normalizeTransactions,
   migrateOpeningBalances,
-  normalizeCategoryName,
 } from './transactionUtils.js'
 import {
   ensureCategories,
@@ -12,15 +10,20 @@ import {
   ensurePlanningCosts,
 } from './categoryUtils.js'
 
-const seedState = createSeedState()
+function createEmptyState() {
+  return {
+    accounts: [],
+    baseAccounts: [],
+    transactions: [],
+    categories: [],
+    budgets: [],
+    planningCosts: [],
+  }
+}
 
 function normalizeState(state) {
-  // Debug log
-  console.log('normalizeState input:', state)
-  
   if (!state || !Array.isArray(state.accounts)) {
-    console.log('Using seedState instead')
-    return seedState
+    return createEmptyState()
   }
   
   const categories = ensureCategories(state.categories)
@@ -44,8 +47,7 @@ function normalizeState(state) {
     budgets,
     planningCosts,
   }
-  
-  console.log('normalizeState result:', finalState)
+
   return finalState
 }
 
@@ -209,26 +211,31 @@ const actionHandlers = {
   },
 
   UPDATE_BUDGET: (state, payload) => {
-    const { cycleId, budgets } = payload
-    const updatedBudgets = state.budgets.map((budget) =>
-      budget.cycleId === cycleId ? { ...budget, budgets } : budget
-    )
+    const { cycleId, categoryId, amount } = payload
+    const existingBudget = state.budgets.find((budget) => budget.cycleId === cycleId)
+    const currentBudgets = existingBudget?.budgets || {}
     
-    // If no budget exists for this cycle, add it
-    if (!updatedBudgets.some((budget) => budget.cycleId === cycleId)) {
-      updatedBudgets.push({ cycleId, budgets })
+    const updatedBudgets = {
+      ...currentBudgets,
+      [categoryId]: amount,
     }
+
+    const newBudgetsArray = existingBudget
+      ? state.budgets.map((budget) =>
+          budget.cycleId === cycleId ? { ...budget, budgets: updatedBudgets } : budget
+        )
+      : [...state.budgets, { cycleId, budgets: updatedBudgets }]
     
     return {
       ...state,
-      budgets: updatedBudgets,
+      budgets: newBudgetsArray,
     }
   },
 }
 
 export function financeReducer(state, action) {
   if (!state) {
-    return seedState
+    return createEmptyState()
   }
   
   const handler = actionHandlers[action.type]
@@ -240,8 +247,5 @@ export function financeReducer(state, action) {
 }
 
 export function initFinanceState(persistedState) {
-  console.log('initFinanceState input:', persistedState)
-  const result = normalizeState(persistedState)
-  console.log('initFinanceState output:', result)
-  return result
+  return normalizeState(persistedState)
 }

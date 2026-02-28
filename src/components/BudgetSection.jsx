@@ -13,6 +13,130 @@ function getBudgetBarColor(percent) {
   return 'bg-green-600'
 }
 
+function SortableBudgetItem({
+  item,
+  spentByCategory,
+  inputValues,
+  setInputValues,
+  dispatch,
+  activeCycleId,
+  toggleCategoryVisibility,
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: item.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  const budgeted = Number(inputValues[item.id]) || 0
+  const spent = spentByCategory.get(item.id) || 0
+  const percent = budgeted
+    ? Math.round((spent / budgeted) * 100)
+    : 0
+  const capped = Math.min(percent, 100)
+  const remaining = budgeted - spent
+
+  return (
+    <div ref={setNodeRef} style={style} className="space-y-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2 flex-1 min-w-0">
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600 flex-shrink-0 mt-1"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-slate-900 truncate">
+              {item.name}
+            </p>
+            <label className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+              <span className="flex-shrink-0">Budget:</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={inputValues[item.id] || ''}
+                onChange={(event) => {
+                  const newValue = event.target.value
+                  setInputValues((prev) => ({
+                    ...prev,
+                    [item.id]: newValue,
+                  }))
+                }}
+                onBlur={(event) => {
+                  const value = Number(event.target.value) || 0
+                  dispatch({
+                    type: 'UPDATE_BUDGET',
+                    payload: {
+                      cycleId: activeCycleId,
+                      categoryId: item.id,
+                      amount: value,
+                    },
+                  })
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.target.blur()
+                  }
+                }}
+                className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 flex-shrink-0"
+              />
+            </label>
+          </div>
+        </div>
+        <div className="flex items-start gap-2 flex-shrink-0">
+          <div className="text-right">
+            <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">
+              {formatCurrency(spent)}
+            </p>
+            <p className="text-xs text-slate-500 whitespace-nowrap">
+              {remaining >= 0
+                ? `${formatCurrency(remaining)} left`
+                : `${formatCurrency(Math.abs(remaining))} over`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => toggleCategoryVisibility(item.id)}
+            className="p-1 text-slate-400 hover:text-slate-600 flex-shrink-0 mt-1"
+            title="Hide category"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={`h-2 rounded-full transition-colors duration-200 ${getBudgetBarColor(percent)}`}
+          style={{ width: `${capped}%` }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage:
+              'repeating-linear-gradient(to right, transparent 0, transparent calc(10% - 1px), rgba(100, 116, 139, 0.35) calc(10% - 1px), rgba(100, 116, 139, 0.35) 10%)',
+          }}
+        />
+      </div>
+      <p className="text-xs text-slate-500">{percent}% used</p>
+    </div>
+  )
+}
+
 export default function BudgetSection({
   categories = [],
   budgets,
@@ -102,115 +226,6 @@ export default function BudgetSection({
       .filter(Boolean)
       .filter(cat => !hiddenCategories.has(cat.id))
   }, [sortableCategories, categories, hiddenCategories])
-
-  function SortableBudgetItem({ item, spentByCategory, inputValues, setInputValues, dispatch, activeCycleId, toggleCategoryVisibility }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: item.id })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  }
-
-  const budgeted = Number(inputValues[item.id]) || 0
-  const spent = spentByCategory.get(item.id) || 0
-  const percent = budgeted
-    ? Math.round((spent / budgeted) * 100)
-    : 0
-  const capped = Math.min(percent, 100)
-  const remaining = budgeted - spent
-
-  return (
-    <div ref={setNodeRef} style={style} className="space-y-2">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2 flex-1 min-w-0">
-          <div
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600 flex-shrink-0 mt-1"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-900 truncate">
-              {item.name}
-            </p>
-            <label className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-              <span className="flex-shrink-0">Budget:</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={inputValues[item.id] || ''}
-                onChange={(event) => {
-                  const newValue = event.target.value
-                  setInputValues(prev => ({
-                    ...prev,
-                    [item.id]: newValue
-                  }))
-                }}
-                onBlur={(event) => {
-                  const value = Number(event.target.value) || 0
-                  dispatch({
-                    type: 'UPDATE_BUDGET',
-                    payload: {
-                      cycleId: activeCycleId,
-                      categoryId: item.id,
-                      amount: value,
-                    },
-                  })
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.target.blur()
-                  }
-                }}
-                className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 flex-shrink-0"
-              />
-            </label>
-          </div>
-        </div>
-        <div className="flex items-start gap-2 flex-shrink-0">
-          <div className="text-right">
-            <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">
-              {formatCurrency(spent)}
-            </p>
-            <p className="text-xs text-slate-500 whitespace-nowrap">
-              {remaining >= 0
-                ? `${formatCurrency(remaining)} left`
-                : `${formatCurrency(Math.abs(remaining))} over`}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => toggleCategoryVisibility(item.id)}
-            className="p-1 text-slate-400 hover:text-slate-600 flex-shrink-0 mt-1"
-            title="Hide category"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-      <div className="h-2 w-full rounded-full bg-slate-100">
-        <div
-          className={`h-2 rounded-full transition-colors duration-200 ${getBudgetBarColor(percent)}`}
-          style={{ width: `${capped}%` }}
-        />
-      </div>
-      <p className="text-xs text-slate-500">{percent}% used</p>
-    </div>
-  )
-}
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

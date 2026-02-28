@@ -1,7 +1,9 @@
+import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url'
+
 export async function createSqliteDatabase(bytes) {
   const initSqlJs = (await import('sql.js')).default
   const SQL = await initSqlJs({
-    locateFile: (file) => `/node_modules/sql.js/dist/${file}`,
+    locateFile: () => wasmUrl,
   })
 
   if (bytes && bytes.length) {

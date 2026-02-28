@@ -1,4 +1,5 @@
 import { createSqliteDatabase } from './sqliteDriver.js'
+import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
 
 const STATE_KEY = 'financeState-v1'
 const LAYOUT_KEY = 'layoutState-v1'
@@ -11,19 +12,53 @@ const IDB_NAME = 'finance-dashboard'
 const IDB_STORE = 'keyval'
 const DB_BYTES_KEY = 'finance-sqlite-db'
 const BACKUP_BYTES_KEY = 'finance-sqlite-backup'
+const CLOUD_STATE_TABLE = 'user_finance_state'
+const CLOUD_LAYOUT_TABLE = 'user_layout_state'
+const CLOUD_COVER_TABLE = 'user_cover_image'
 
 let dbPromise = null
 export function createPersistenceAdapter() {
   const adapter = {
     loadState: async () => {
+      const userId = await getCurrentUserId()
+      if (userId) {
+        const cloudState = await loadCloudValue({
+          table: CLOUD_STATE_TABLE,
+          column: 'state',
+          userId,
+        })
+        if (cloudState) {
+          return cloudState
+        }
+      }
+
       const db = await getDatabase()
       const raw = readStateRow(db)
       if (!raw) return null
       const parsed = safeParse(raw)
+      if (userId && parsed) {
+        await saveCloudValue({
+          table: CLOUD_STATE_TABLE,
+          column: 'state',
+          userId,
+          value: parsed,
+        })
+      }
       return parsed ?? null
     },
     saveState: async (state) => {
       if (typeof state === 'undefined') return
+
+      const userId = await getCurrentUserId()
+      if (userId) {
+        await saveCloudValue({
+          table: CLOUD_STATE_TABLE,
+          column: 'state',
+          userId,
+          value: state,
+        })
+      }
+
       const db = await getDatabase()
       const json = JSON.stringify(state)
       writeStateRow(db, json)
@@ -171,28 +206,88 @@ async function migrateLegacyLocalStorage(db) {
 }
 
 export async function loadLayoutState() {
+  const userId = await getCurrentUserId()
+  if (userId) {
+    const cloudLayout = await loadCloudValue({
+      table: CLOUD_LAYOUT_TABLE,
+      column: 'layout',
+      userId,
+    })
+    if (cloudLayout) {
+      return cloudLayout
+    }
+  }
+
   const db = await getDatabase()
   const raw = readRow(db, LAYOUT_KEY)
   if (!raw) return null
   const parsed = safeParse(raw)
+  if (userId && parsed) {
+    await saveCloudValue({
+      table: CLOUD_LAYOUT_TABLE,
+      column: 'layout',
+      userId,
+      value: parsed,
+    })
+  }
   return parsed ?? null
 }
 
 export async function saveLayoutState(layout) {
   if (typeof layout === 'undefined') return
+
+  const userId = await getCurrentUserId()
+  if (userId) {
+    await saveCloudValue({
+      table: CLOUD_LAYOUT_TABLE,
+      column: 'layout',
+      userId,
+      value: layout,
+    })
+  }
+
   const db = await getDatabase()
   writeRow(db, LAYOUT_KEY, JSON.stringify(layout))
   await persistDatabase(db)
 }
 
 export async function loadCoverImage() {
+  const userId = await getCurrentUserId()
+  if (userId) {
+    const cloudCover = await loadCloudValue({
+      table: CLOUD_COVER_TABLE,
+      column: 'image',
+      userId,
+    })
+    if (cloudCover) return cloudCover
+  }
+
   const db = await getDatabase()
   const raw = readRow(db, COVER_KEY)
   if (!raw) return null
-  return safeParse(raw)
+  const parsed = safeParse(raw)
+  if (userId && parsed) {
+    await saveCloudValue({
+      table: CLOUD_COVER_TABLE,
+      column: 'image',
+      userId,
+      value: parsed,
+    })
+  }
+  return parsed
 }
 
 export async function saveCoverImage(value) {
+  const userId = await getCurrentUserId()
+  if (userId) {
+    await saveCloudValue({
+      table: CLOUD_COVER_TABLE,
+      column: 'image',
+      userId,
+      value: value ?? null,
+    })
+  }
+
   const db = await getDatabase()
   writeRow(db, COVER_KEY, JSON.stringify(value ?? null))
   await persistDatabase(db)
@@ -305,4 +400,43 @@ async function clearDB() {
 
 async function saveBackup(value) {
   await idbSet(BACKUP_BYTES_KEY, value)
+}
+
+async function getCurrentUserId() {
+  if (!isSupabaseConfigured || !supabase) return null
+  try {
+    const { data, error } = await supabase.auth.getSession()
+    if (error) return null
+    return data.session?.user?.id ?? null
+  } catch (error) {
+    return null
+  }
+}
+
+async function loadCloudValue({ table, column, userId }) {
+  if (!supabase) return null
+  try {
+    const { data, error } = await supabase
+      .from(table)
+      .select(column)
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error || !data) return null
+    return data[column] ?? null
+  } catch (error) {
+    return null
+  }
+}
+
+async function saveCloudValue({ table, column, userId, value }) {
+  if (!supabase) return
+  try {
+    await supabase.from(table).upsert({
+      user_id: userId,
+      [column]: value,
+      updated_at: new Date().toISOString(),
+    })
+  } catch (error) {
+    // Fall back to local-only persistence when cloud write fails.
+  }
 }

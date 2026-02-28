@@ -7,7 +7,7 @@ import {
   loadCoverImage,
   saveCoverImage,
 } from '../persistence/index.js'
-import DashboardLayout from '../ui/layout/DashboardLayout.tsx'
+import FreeGridLayout from '../ui/layout/FreeGridLayout.tsx'
 import { DEFAULT_LAYOUT } from '../ui/layout/defaultLayout'
 import { layoutReducer, normalizeLayoutState } from '../ui/layout/layoutReducer'
 import { validateFile, validateFileContent } from '../utils/fileValidation.js'
@@ -112,28 +112,24 @@ export default function Dashboard({
     layoutDispatch({ type: 'RESET_LAYOUT' })
   }
 
-  const handleMoveBlock = (payload) => {
+  const handleMoveItem = (payload) => {
     layoutDispatch({
-      type: 'MOVE_BLOCK',
+      type: 'MOVE_ITEM_TO_CELL',
       payload,
     })
   }
 
-  const handleAddColumn = () => {
-    layoutDispatch({ type: 'ADD_COLUMN' })
-  }
-
-  const handleRemoveColumn = (payload) => {
+  const handleResizeItem = (payload) => {
     layoutDispatch({
-      type: 'REMOVE_COLUMN',
+      type: 'RESIZE_ITEM',
       payload,
     })
   }
 
-  const handleSetBlockWidth = (id, width) => {
+  const handleToggleCollapse = (id) => {
     layoutDispatch({
-      type: 'SET_BLOCK_WIDTH',
-      payload: { blockId: id, width },
+      type: 'TOGGLE_COLLAPSE',
+      payload: { id },
     })
   }
 
@@ -267,7 +263,7 @@ export default function Dashboard({
   }
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-8 px-6 py-8">
+    <div className="mx-auto max-w-[1920px] space-y-8 px-6 py-8">
       <CoverHeader
         coverImage={coverImage}
         onChangeCover={handleCoverPick}
@@ -321,15 +317,14 @@ export default function Dashboard({
 
       <KpiGrid items={kpis} />
 
-      <DashboardLayout
+      <FreeGridLayout
         layoutState={layoutState}
         blockContext={blockContext}
-        onMoveBlock={handleMoveBlock}
+        onMoveItem={handleMoveItem}
+        onResizeItem={handleResizeItem}
         onToggleVisibility={handleToggleVisibility}
         onResetLayout={handleResetLayout}
-        onAddColumn={handleAddColumn}
-        onRemoveColumn={handleRemoveColumn}
-        onSetBlockWidth={handleSetBlockWidth}
+        onToggleCollapse={handleToggleCollapse}
       />
     </div>
   )

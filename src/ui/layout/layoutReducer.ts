@@ -1,9 +1,7 @@
 import { DEFAULT_LAYOUT } from './defaultLayout'
 import type {
-  BlockWidth,
   LayoutAction,
-  LayoutBlock,
-  LayoutColumn,
+  LayoutItem,
   LayoutState,
 } from './layoutTypes'
 
@@ -12,84 +10,52 @@ export function layoutReducer(
   action: LayoutAction
 ): LayoutState {
   switch (action.type) {
-    case 'MOVE_BLOCK': {
-      const { blockId, fromColumnId, toColumnId, toIndex } =
-        action.payload || {}
-      if (!blockId || !fromColumnId || !toColumnId) {
-        console.warn('MOVE_BLOCK blocked: missing payload')
+    case 'MOVE_ITEM_TO_CELL': {
+      const payload = action.payload
+      const item = state.items.find((entry) => entry.id === payload?.id)
+      if (!item || !payload) return state
+      if (item.locked) return state
+
+      const next = {
+        ...item,
+        x: clamp(payload.x, 0, state.grid.cols - item.w),
+        y: clamp(payload.y, 0, state.grid.rows - item.h),
+      }
+
+      if (!canPlace(next, state.items, state.grid)) {
         return state
       }
-
-      const fromColumn = findColumn(state.columns, fromColumnId)
-      const toColumn = findColumn(state.columns, toColumnId)
-      if (!fromColumn || !toColumn) {
-        console.warn('MOVE_BLOCK blocked: column not found')
-        return state
-      }
-
-      const fromIndex = fromColumn.blocks.findIndex(
-        (block) => block.id === blockId
-      )
-      if (fromIndex === -1) {
-        console.warn('MOVE_BLOCK blocked: block not in source column')
-        return state
-      }
-
-      const activeBlock = fromColumn.blocks[fromIndex]
-      if (isBlockLocked(activeBlock)) {
-        console.warn('MOVE_BLOCK blocked: active block locked')
-        return state
-      }
-
-      if (fromColumnId === toColumnId) {
-        if (fromIndex === toIndex) {
-          console.warn('MOVE_BLOCK blocked: same index')
-          return state
-        }
-        const targetBlock = fromColumn.blocks[toIndex]
-        if (targetBlock && isBlockLocked(targetBlock)) {
-          console.warn('MOVE_BLOCK blocked: target locked')
-          return state
-        }
-        if (hasLockedBetween(fromColumn.blocks, fromIndex, toIndex)) {
-          console.warn('MOVE_BLOCK blocked: locked between')
-          return state
-        }
-        return updateColumn(state, fromColumnId, (column) => ({
-          ...column,
-          blocks: arrayMove(column.blocks, fromIndex, toIndex),
-        }))
-      }
-
-      const firstLockedIndex = toColumn.blocks.findIndex((block) =>
-        isBlockLocked(block)
-      )
-      const maxInsertIndex =
-        firstLockedIndex === -1 ? toColumn.blocks.length : firstLockedIndex
-      const rawInsertIndex = clampIndex(toIndex, toColumn.blocks.length)
-      const insertIndex = Math.min(rawInsertIndex, maxInsertIndex)
-
-      const nextColumns = state.columns.map((column) => {
-        if (column.id === fromColumnId) {
-          return {
-            ...column,
-            blocks: column.blocks.filter((block) => block.id !== blockId),
-          }
-        }
-        if (column.id === toColumnId) {
-          const nextBlocks = column.blocks.slice()
-          nextBlocks.splice(insertIndex, 0, activeBlock)
-          return {
-            ...column,
-            blocks: nextBlocks,
-          }
-        }
-        return column
-      })
 
       return {
         ...state,
-        columns: nextColumns,
+        items: state.items.map((entry) =>
+          entry.id === item.id ? next : entry
+        ),
+      }
+    }
+    case 'RESIZE_ITEM': {
+      const payload = action.payload
+      const item = state.items.find((entry) => entry.id === payload?.id)
+      if (!item || !payload) return state
+      if (item.locked) return state
+
+      const resized: LayoutItem = {
+        ...item,
+        w: clamp(payload.w, 1, state.grid.cols),
+        h: clamp(payload.h, 1, state.grid.rows),
+      }
+      resized.x = clamp(resized.x, 0, state.grid.cols - resized.w)
+      resized.y = clamp(resized.y, 0, state.grid.rows - resized.h)
+
+      if (!canPlace(resized, state.items, state.grid)) {
+        return state
+      }
+
+      return {
+        ...state,
+        items: state.items.map((entry) =>
+          entry.id === item.id ? resized : entry
+        ),
       }
     }
     case 'TOGGLE_BLOCK_VISIBILITY': {
@@ -97,52 +63,9 @@ export function layoutReducer(
       if (!id) return state
       return {
         ...state,
-        columns: state.columns.map((column) => ({
-          ...column,
-          blocks: column.blocks.map((block) =>
-            block.id === id
-              ? { ...block, hidden: !isBlockHidden(block) }
-              : block
-          ),
-        })),
-      }
-    }
-    case 'SET_BLOCK_WIDTH': {
-      const payload = action.payload
-      const blockId = payload?.blockId
-      if (!blockId) return state
-      return {
-        ...state,
-        columns: state.columns.map((column) => ({
-          ...column,
-          blocks: column.blocks.map((block) =>
-            block.id === blockId
-              ? { ...block, width: payload.width }
-              : block
-          ),
-        })),
-      }
-    }
-    case 'ADD_COLUMN': {
-      const newColumn: LayoutColumn = {
-        id: createColumnId(state.columns),
-        blocks: [],
-      }
-      return {
-        ...state,
-        columns: [...state.columns, newColumn],
-      }
-    }
-    case 'REMOVE_COLUMN': {
-      if (state.columns.length <= 1) return state
-      const targetId =
-        action.payload?.id || state.columns[state.columns.length - 1]?.id
-      const target = state.columns.find((column) => column.id === targetId)
-      if (!target) return state
-      if (target.blocks.length) return state
-      return {
-        ...state,
-        columns: state.columns.filter((column) => column.id !== targetId),
+        items: state.items.map((item) =>
+          item.id === id ? { ...item, hidden: !isItemHidden(item) } : item
+        ),
       }
     }
     case 'RESET_LAYOUT':
@@ -152,14 +75,11 @@ export function layoutReducer(
       if (!collapseId) return state
       return {
         ...state,
-        columns: state.columns.map((column) => ({
-          ...column,
-          blocks: column.blocks.map((block) =>
-            block.id === collapseId
-              ? { ...block, collapsed: !block.collapsed }
-              : block
-          ),
-        })),
+        items: state.items.map((item) =>
+          item.id === collapseId
+            ? { ...item, collapsed: !item.collapsed }
+            : item
+        ),
       }
     }
     default:
@@ -167,136 +87,153 @@ export function layoutReducer(
   }
 }
 
-export function normalizeLayoutState(input?: LayoutState | { blocks?: LayoutBlock[] }) {
-  if (input && Array.isArray(input.columns) && input.columns.length) {
+export function normalizeLayoutState(input?: any): LayoutState {
+  // already grid v2
+  if (
+    input &&
+    input.version === 2 &&
+    input.grid &&
+    Array.isArray(input.items)
+  ) {
     return {
-      columns: input.columns.map((column, index) => ({
-        id: column.id || `column-${index + 1}`,
-        blocks: (column.blocks || []).map(normalizeBlock),
-      })),
+      version: 2,
+      grid: {
+        cols: Math.max(Number(input.grid.cols) || 0, DEFAULT_LAYOUT.grid.cols),
+        rows: Math.max(Number(input.grid.rows) || 0, DEFAULT_LAYOUT.grid.rows),
+      },
+      columns: [],
+      items: input.items.map(normalizeItem),
     }
   }
 
-  const legacyBlocks = Array.isArray(input?.blocks) ? input.blocks : []
-  if (legacyBlocks.length) {
-    return {
-      columns: [
-        {
-          id: 'column-1',
-          blocks: legacyBlocks.map(normalizeBlock),
-        },
-      ],
+  // migrate old column model
+  if (input && Array.isArray(input.columns)) {
+    const migrated: LayoutItem[] = []
+    const fallback = cloneLayout(DEFAULT_LAYOUT)
+    let yCursor = 0
+
+    input.columns.forEach((column: any, columnIndex: number) => {
+      const blocks = Array.isArray(column?.blocks) ? column.blocks : []
+      blocks.forEach((block: any, blockIndex: number) => {
+        const fallbackItem = fallback.items.find((entry) => entry.id === block.id)
+        const w = legacyWidthToCols(block.width)
+        const h = fallbackItem?.h || 2
+        const x = clamp(columnIndex * 3, 0, fallback.grid.cols - w)
+        const y = Math.max(yCursor, blockIndex * 2)
+        migrated.push({
+          id: block.id,
+          x,
+          y,
+          w,
+          h,
+          hidden: isItemHidden(block),
+          locked: Boolean(block.locked),
+          collapsed: Boolean(block.collapsed),
+        })
+      })
+      yCursor += 1
+    })
+
+    if (migrated.length) {
+      return {
+        version: 2,
+        grid: { ...fallback.grid },
+        columns: [],
+        items: compactIntoGrid(migrated, fallback.grid),
+      }
     }
   }
 
   return cloneLayout(DEFAULT_LAYOUT)
 }
 
+function normalizeItem(item: any): LayoutItem {
+  const fallback = DEFAULT_LAYOUT.items.find((entry) => entry.id === item?.id)
+  return {
+    id: item?.id || fallback?.id,
+    x: Number.isFinite(item?.x) ? item.x : fallback?.x || 0,
+    y: Number.isFinite(item?.y) ? item.y : fallback?.y || 0,
+    w: Number.isFinite(item?.w) ? item.w : fallback?.w || 2,
+    h: Number.isFinite(item?.h) ? item.h : fallback?.h || 2,
+    hidden: isItemHidden(item),
+    locked: Boolean(item?.locked),
+    collapsed: Boolean(item?.collapsed),
+  }
+}
+
 function cloneLayout(layout: LayoutState): LayoutState {
   return {
-    columns: layout.columns.map((column) => ({
-      id: column.id,
-      blocks: column.blocks.map((block) => ({ ...block })),
-    })),
+    version: 2,
+    grid: { ...layout.grid },
+    columns: [],
+    items: layout.items.map((item) => ({ ...item })),
   }
 }
 
-function normalizeBlock(block: LayoutBlock): LayoutBlock {
-  return {
-    id: block.id,
-    hidden: isBlockHidden(block),
-    locked: Boolean(block.locked),
-    width: normalizeWidth(block.width),
-  }
-}
-
-function normalizeWidth(width?: BlockWidth) {
-  if (
-    width === 'half' ||
-    width === 'third' ||
-    width === 'auto' ||
-    width === 'full'
-  ) {
-    return width
-  }
-  return 'auto'
-}
-
-function findColumn(columns: LayoutColumn[], id: string) {
-  return columns.find((column) => column.id === id) || null
-}
-
-function updateColumn(
-  state: LayoutState,
-  columnId: string,
-  updater: (column: LayoutColumn) => LayoutColumn
-) {
-  return {
-    ...state,
-    columns: state.columns.map((column) =>
-      column.id === columnId ? updater(column) : column
-    ),
-  }
-}
-
-function clampIndex(index: number, length: number) {
-  if (!Number.isFinite(index)) return length
-  if (index < 0) return 0
-  if (index > length) return length
-  return index
-}
-
-function arrayMove<T>(items: T[], fromIndex: number, toIndex: number): T[] {
-  const next = items.slice()
-  const [moved] = next.splice(fromIndex, 1)
-  next.splice(toIndex, 0, moved)
-  return next
-}
-
-function isBlockHidden(block: { hidden?: boolean; visible?: boolean }) {
-  if (typeof block.hidden === 'boolean') return block.hidden
-  if (typeof block.visible === 'boolean') return !block.visible
+function isItemHidden(item: { hidden?: boolean; visible?: boolean }) {
+  if (typeof item.hidden === 'boolean') return item.hidden
+  if (typeof item.visible === 'boolean') return !item.visible
   return false
 }
 
-function isBlockLocked(block: { locked?: boolean }) {
-  return Boolean(block?.locked)
+function legacyWidthToCols(width?: string) {
+  if (width === 'third') return 1
+  if (width === 'half') return 2
+  if (width === 'full') return 3
+  return 2
 }
 
-function hasLockedBetween(
-  blocks: Array<{ locked?: boolean }>,
-  fromIndex: number,
-  toIndex: number
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function rectsOverlap(a: LayoutItem, b: LayoutItem) {
+  return !(
+    a.x + a.w <= b.x ||
+    b.x + b.w <= a.x ||
+    a.y + a.h <= b.y ||
+    b.y + b.h <= a.y
+  )
+}
+
+function canPlace(
+  candidate: LayoutItem,
+  items: LayoutItem[],
+  grid: LayoutState['grid']
 ) {
-  const start = Math.min(fromIndex, toIndex)
-  const end = Math.max(fromIndex, toIndex)
-  for (let index = start + 1; index < end; index += 1) {
-    if (isBlockLocked(blocks[index])) {
-      return true
+  if (candidate.x < 0 || candidate.y < 0) return false
+  if (candidate.x + candidate.w > grid.cols) return false
+  if (candidate.y + candidate.h > grid.rows) return false
+
+  for (const item of items) {
+    if (item.id === candidate.id) continue
+    if (isItemHidden(item)) continue
+    if (rectsOverlap(candidate, item)) return false
+  }
+  return true
+}
+
+function compactIntoGrid(items: LayoutItem[], grid: LayoutState['grid']) {
+  const placed: LayoutItem[] = []
+  for (const item of items) {
+    const normalized = { ...item }
+    let placedItem = false
+    for (let y = 0; y <= grid.rows - normalized.h && !placedItem; y += 1) {
+      for (let x = 0; x <= grid.cols - normalized.w && !placedItem; x += 1) {
+        const candidate = { ...normalized, x, y }
+        if (canPlace(candidate, placed, grid)) {
+          placed.push(candidate)
+          placedItem = true
+        }
+      }
+    }
+    if (!placedItem) {
+      placed.push({
+        ...normalized,
+        x: clamp(normalized.x, 0, Math.max(grid.cols - normalized.w, 0)),
+        y: clamp(normalized.y, 0, Math.max(grid.rows - normalized.h, 0)),
+      })
     }
   }
-  return false
-}
-
-function hasLockedAfterIndex(
-  blocks: Array<{ locked?: boolean }>,
-  startIndex: number
-) {
-  for (let index = startIndex + 1; index < blocks.length; index += 1) {
-    if (isBlockLocked(blocks[index])) {
-      return true
-    }
-  }
-  return false
-}
-
-function createColumnId(columns: LayoutColumn[]) {
-  const existing = new Set(columns.map((column) => column.id))
-  let index = columns.length + 1
-  let candidate = `column-${index}`
-  while (existing.has(candidate)) {
-    index += 1
-    candidate = `column-${index}`
-  }
-  return candidate
+  return placed
 }

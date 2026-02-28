@@ -1,7 +1,41 @@
 import type { BlockId } from '../blocks/blockCatalog'
 
+export type BlockSizePreset =
+  | '1x2'
+  | '2x2'
+  | '3x2'
+  | '1x3'
+  | '2x3'
+  | '3x3'
+
+// Legacy compatibility for old column-based UI components.
 export type BlockWidth = 'full' | 'half' | 'third' | 'auto'
 
+export type GridSize = {
+  cols: number
+  rows: number
+}
+
+export type LayoutItem = {
+  id: BlockId
+  x: number
+  y: number
+  w: number
+  h: number
+  hidden?: boolean
+  locked?: boolean
+  visible?: boolean
+  collapsed?: boolean
+}
+
+export type LayoutState = {
+  version: 2
+  grid: GridSize
+  items: LayoutItem[]
+  columns: LayoutColumn[]
+}
+
+// Legacy compatibility for old column-based UI components.
 export type LayoutBlock = {
   id: BlockId
   hidden?: boolean
@@ -16,41 +50,27 @@ export type LayoutColumn = {
   blocks: LayoutBlock[]
 }
 
-export type LayoutState = {
-  columns: LayoutColumn[]
-}
-
 export type LayoutAction =
   | {
-      type: 'MOVE_BLOCK'
+      type: 'MOVE_ITEM_TO_CELL'
       payload: {
-        blockId: BlockId
-        fromColumnId: string
-        toColumnId: string
-        toIndex: number
+        id: BlockId
+        x: number
+        y: number
+      }
+    }
+  | {
+      type: 'RESIZE_ITEM'
+      payload: {
+        id: BlockId
+        w: number
+        h: number
       }
     }
   | {
       type: 'TOGGLE_BLOCK_VISIBILITY'
       payload: {
         id: BlockId
-      }
-    }
-  | {
-      type: 'SET_BLOCK_WIDTH'
-      payload: {
-        blockId: BlockId
-        width: BlockWidth
-      }
-    }
-  | {
-      type: 'ADD_COLUMN'
-    }
-  | {
-      type: 'REMOVE_COLUMN'
-      payload?: {
-        id?: string
-        force?: boolean
       }
     }
   | {

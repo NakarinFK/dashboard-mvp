@@ -164,8 +164,8 @@ export function buildKpis({
     },
     {
       label: 'Budget Left',
-      value: formatCurrency(Number(budgetTotal || 0) - Number(spentTotal || 0)),
-      note: 'Remaining before month end',
+      value: `${formatCurrency(spentTotal || 0)} / ${formatCurrency(budgetTotal || 0)}`,
+      note: 'Spent / Total Budget',
     },
   ]
 }
