@@ -141,6 +141,7 @@ export default function BudgetSection({
   categories = [],
   budgets,
   activeCycleId,
+  viewMode = 'cycle',
   transactions = [],
   dispatch,
 }) {
@@ -233,6 +234,11 @@ export default function BudgetSection({
         title="Budget Plan"
         subtitle={`Tracked by category · ${monthLabel}`}
       />
+      {viewMode === 'all' ? (
+        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Historical view is enabled. Budget editing remains scoped to cycle {activeCycleId}.
+        </p>
+      ) : null}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

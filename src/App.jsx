@@ -11,6 +11,7 @@ import { isSupabaseConfigured, supabase } from './lib/supabaseClient.js'
 export default function App({ initialState, initialLayoutState }) {
   const [session, setSession] = useState(null)
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
+  const [viewMode, setViewMode] = useState('cycle')
 
   const [state, dispatch] = useReducer(
     financeReducer,
@@ -58,7 +59,7 @@ export default function App({ initialState, initialLayoutState }) {
   }, [state])
 
   const activeCycleId = useMemo(() => getCurrentCycleId(), [])
-  const derived = useDerivedData(state, activeCycleId)
+  const derived = useDerivedData(state, activeCycleId, viewMode)
 
   if (!authReady) {
     return (
@@ -105,6 +106,10 @@ export default function App({ initialState, initialLayoutState }) {
         transactions={derived.transactions}
         formAccounts={state.accounts || []}
         rawTransactions={state.transactions || []}
+        viewMode={viewMode}
+        onToggleViewMode={() =>
+          setViewMode((prev) => (prev === 'cycle' ? 'all' : 'cycle'))
+        }
         dispatch={dispatch}
         initialLayoutState={initialLayoutState}
       />

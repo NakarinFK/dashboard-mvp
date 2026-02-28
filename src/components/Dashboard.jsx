@@ -23,6 +23,8 @@ export default function Dashboard({
   transactions,
   formAccounts,
   rawTransactions,
+  viewMode = 'cycle',
+  onToggleViewMode,
   dispatch,
   initialLayoutState,
 }) {
@@ -157,6 +159,7 @@ export default function Dashboard({
     categories,
     budgets,
     activeCycleId,
+    viewMode,
     planningCosts,
     cashFlow,
     transactions,
@@ -291,6 +294,13 @@ export default function Dashboard({
           Money Trackers
         </h1>
         <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onToggleViewMode}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm hover:text-slate-900"
+          >
+            {viewMode === 'all' ? 'Back to Current Cycle' : 'Show All Cycles'}
+          </button>
           <input
             ref={fileInputRef}
             type="file"

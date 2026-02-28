@@ -25,6 +25,7 @@ export type BlockContext = {
   categories: any[]
   budgets: any[]
   activeCycleId: string
+  viewMode: 'cycle' | 'all'
   planningCosts: any[]
   cashFlow: any
   transactions: any[]
@@ -81,6 +82,7 @@ export const BLOCK_CATALOG: Record<BlockId, BlockDefinition> = {
       categories: context.categories,
       accounts: context.formAccounts,
       activeCycleId: context.activeCycleId,
+      viewMode: context.viewMode,
       dispatch: context.dispatch,
     }),
   },
@@ -92,6 +94,7 @@ export const BLOCK_CATALOG: Record<BlockId, BlockDefinition> = {
       categories: context.categories,
       budgets: context.budgets,
       activeCycleId: context.activeCycleId,
+      viewMode: context.viewMode,
       transactions: context.rawTransactions,
       dispatch: context.dispatch,
     }),
