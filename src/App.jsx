@@ -60,6 +60,8 @@ export default function App({ initialState, initialLayoutState }) {
     void persistenceAdapter.saveState(state)
   }, [state])
 
+  const fileInputRef = useRef(null)
+
   const activeCycleId = useMemo(() => getCurrentCycleId(), [])
   const derived = useDerivedData(state, activeCycleId, selectedCycleId)
 
@@ -89,8 +91,6 @@ export default function App({ initialState, initialLayoutState }) {
     if (!supabase) return
     await supabase.auth.signOut()
   }
-
-  const fileInputRef = useRef(null)
 
   const handleImportClick = () => {
     fileInputRef.current?.click()
